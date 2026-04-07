@@ -1,7 +1,7 @@
-import AuthPage from "@/components/AuthPage";
+import Auth from "./Auth";
 
 const Index = () => {
-  return <AuthPage />;
+  return <Auth />;
 };
 
 export default Index;
