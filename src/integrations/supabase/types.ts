@@ -911,7 +911,66 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      archive_profile: {
+        Args: { _archived_by: string; _profile_id: string }
+        Returns: undefined
+      }
+      generate_employee_id: {
+        Args: { first_name: string; joining_date: string; last_name: string }
+        Returns: string
+      }
+      generate_student_id: {
+        Args: { enrollment_date: string; first_name: string; last_name: string }
+        Returns: string
+      }
+      get_admin_dashboard_stats: {
+        Args: never
+        Returns: {
+          pending_approvals: number
+          pending_fees: number
+          todays_classes: number
+          total_students: number
+        }[]
+      }
+      get_own_profile_protected_fields: {
+        Args: never
+        Returns: {
+          approved: boolean
+          approved_at: string
+          approved_by: string
+          archived: boolean
+          archived_at: string
+          archived_by: string
+          role: Database["public"]["Enums"]["user_role"]
+        }[]
+      }
+      get_own_student_protected_fields: {
+        Args: never
+        Returns: {
+          class: string
+          section: string
+          stream: string
+          student_id: string
+        }[]
+      }
+      get_teacher_id: { Args: never; Returns: string }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_admin: { Args: never; Returns: boolean }
+      is_approved: { Args: never; Returns: boolean }
+      is_co_admin: { Args: never; Returns: boolean }
+      is_date_frozen: { Args: { _date: string }; Returns: boolean }
+      is_teacher: { Args: never; Returns: boolean }
+      is_user_approved: { Args: { _user_id: string }; Returns: boolean }
+      is_user_archived: { Args: { _user_id: string }; Returns: boolean }
+      restore_profile: { Args: { _profile_id: string }; Returns: undefined }
+      teacher_has_class: { Args: { _class_id: string }; Returns: boolean }
+      teacher_has_student: { Args: { _student_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user" | "co_admin" | "teacher"
