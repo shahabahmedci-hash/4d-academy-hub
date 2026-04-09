@@ -8,6 +8,10 @@ import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import Students from "./pages/admin/Students";
+import StudentDetails from "./pages/admin/StudentDetails";
+import Approvals from "./pages/admin/Approvals";
+import Fees from "./pages/admin/Fees";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +28,10 @@ const App = () => (
               <Route path="/" element={<Auth />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              <Route path="/admin/students" element={<Students />} />
+              <Route path="/admin/students/:id" element={<StudentDetails />} />
+              <Route path="/admin/approvals" element={<Approvals />} />
+              <Route path="/admin/fees" element={<Fees />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
