@@ -91,7 +91,7 @@ export const AddTeacherDialog = ({ onTeacherAdded }: AddTeacherDialogProps) => {
 
       if (teacherError) throw teacherError;
 
-      const profileUpdates: Record<string, string> = {};
+      const profileUpdates: { phone?: string; address?: string } = {};
       if (formData.phone) profileUpdates.phone = formData.phone;
       if (formData.address) profileUpdates.address = formData.address;
 

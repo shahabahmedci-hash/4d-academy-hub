@@ -149,7 +149,7 @@ const TeacherDetails = () => {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-4">
-              <ProfileAvatar name={teacher.profiles?.full_name || "?"} avatarUrl={teacher.profiles?.avatar_url} size="lg" />
+              <ProfileAvatar fullName={teacher.profiles?.full_name || "?"} avatarUrl={teacher.profiles?.avatar_url} className="h-16 w-16" />
               <div>
                 <CardTitle>{teacher.profiles?.full_name || "Unknown"}</CardTitle>
                 {teacher.employee_id && <CardDescription>({teacher.employee_id})</CardDescription>}

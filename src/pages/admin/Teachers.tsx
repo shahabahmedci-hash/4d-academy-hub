@@ -161,7 +161,7 @@ const Teachers = () => {
             <Card key={teacher.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/admin/teachers/${teacher.id}`)}>
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-3">
-                  <ProfileAvatar name={teacher.profiles?.full_name || "?"} avatarUrl={teacher.profiles?.avatar_url} size="md" />
+                  <ProfileAvatar fullName={teacher.profiles?.full_name || "?"} avatarUrl={teacher.profiles?.avatar_url} />
                   <div className="flex-1 min-w-0">
                     <CardTitle className="text-base truncate">
                       {teacher.profiles?.full_name || "Unknown Teacher"}
