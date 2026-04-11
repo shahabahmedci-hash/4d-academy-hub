@@ -16,6 +16,10 @@ import Teachers from "./pages/admin/Teachers";
 import TeacherDetails from "./pages/admin/TeacherDetails";
 import Expenses from "./pages/admin/Expenses";
 import Salaries from "./pages/admin/Salaries";
+import Attendance from "./pages/admin/Attendance";
+import TeacherAttendance from "./pages/admin/TeacherAttendance";
+import Classes from "./pages/admin/Classes";
+import Analytics from "./pages/admin/Analytics";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
