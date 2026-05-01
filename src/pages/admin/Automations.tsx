@@ -138,7 +138,7 @@ const Automations = () => {
           ))
         )}
       </main>
-      <BottomNav />
+      <BottomNav role="admin" />
     </div>
   );
 };

@@ -139,7 +139,7 @@ const CoAdmins = () => {
           </div>
         )}
       </main>
-      <BottomNav />
+      <BottomNav role="admin" />
     </div>
   );
 };

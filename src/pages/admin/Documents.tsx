@@ -190,7 +190,7 @@ const Documents = () => {
           </div>
         )}
       </main>
-      <BottomNav />
+      <BottomNav role="admin" />
     </div>
   );
 };

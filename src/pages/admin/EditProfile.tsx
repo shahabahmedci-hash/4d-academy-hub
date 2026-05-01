@@ -148,7 +148,7 @@ const EditProfile = () => {
           </CardContent>
         </Card>
       </main>
-      <BottomNav />
+      <BottomNav role="admin" />
     </div>
   );
 };

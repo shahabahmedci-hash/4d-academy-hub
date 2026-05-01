@@ -99,7 +99,7 @@ const ArchivedProfiles = () => {
           </div>
         )}
       </main>
-      <BottomNav />
+      <BottomNav role="admin" />
     </div>
   );
 };
