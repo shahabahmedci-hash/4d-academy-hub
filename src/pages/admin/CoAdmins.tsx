@@ -29,10 +29,25 @@ const CoAdmins = () => {
 
   const load = async () => {
     setLoading(true);
+    const { data: roles, error: rolesErr } = await supabase
+      .from("user_roles")
+      .select("user_id")
+      .eq("role", "co_admin");
+    if (rolesErr) {
+      toast({ title: "Error", description: rolesErr.message, variant: "destructive" });
+      setLoading(false);
+      return;
+    }
+    const ids = (roles || []).map((r) => r.user_id);
+    if (ids.length === 0) {
+      setCoAdmins([]);
+      setLoading(false);
+      return;
+    }
     const { data, error } = await supabase
       .from("profiles")
       .select("id, full_name, email, approved")
-      .eq("role", "co_admin")
+      .in("id", ids)
       .or("archived.is.null,archived.eq.false")
       .order("created_at", { ascending: false });
     if (error) {
