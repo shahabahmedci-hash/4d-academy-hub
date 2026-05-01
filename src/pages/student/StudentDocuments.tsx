@@ -1,0 +1,94 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import BottomNav from "@/components/shared/BottomNav";
+import PageSkeleton from "@/components/shared/PageSkeleton";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft, FileText, Download } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+
+interface Doc {
+  id: string;
+  title: string;
+  description: string | null;
+  file_name: string;
+  file_url: string;
+  file_size: number | null;
+  created_at: string;
+}
+
+const StudentDocuments = () => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [docs, setDocs] = useState<Doc[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const load = async () => {
+    const { data, error } = await supabase
+      .from("documents")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else setDocs(data || []);
+    setLoading(false);
+  };
+
+  const handleDownload = async (doc: Doc) => {
+    const { data, error } = await supabase.storage.from("documents").createSignedUrl(doc.file_url, 60 * 5);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      return;
+    }
+    window.open(data.signedUrl, "_blank");
+  };
+
+  if (loading) return <PageSkeleton />;
+
+  return (
+    <div className="min-h-screen bg-background pb-20">
+      <header className="border-b bg-card sticky top-0 z-10">
+        <div className="container max-w-5xl mx-auto px-4 py-4 flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/student/dashboard")}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <FileText className="h-5 w-5 text-primary" />
+          <h1 className="text-xl font-bold">Study Materials</h1>
+        </div>
+      </header>
+
+      <main className="container max-w-5xl mx-auto px-4 py-6">
+        {docs.length === 0 ? (
+          <Card><CardContent className="py-12 text-center text-muted-foreground">No documents available.</CardContent></Card>
+        ) : (
+          <div className="space-y-3">
+            {docs.map((d) => (
+              <Card key={d.id}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">{d.title}</CardTitle>
+                  {d.description && <p className="text-sm text-muted-foreground">{d.description}</p>}
+                </CardHeader>
+                <CardContent className="flex items-center justify-between">
+                  <div className="text-xs text-muted-foreground">
+                    <p>{d.file_name}</p>
+                    {d.file_size && <p>{(d.file_size / 1024).toFixed(1)} KB</p>}
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => handleDownload(d)}>
+                    <Download className="h-4 w-4 mr-1" /> Open
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </main>
+      <BottomNav role="student" />
+    </div>
+  );
+};
+
+export default StudentDocuments;
