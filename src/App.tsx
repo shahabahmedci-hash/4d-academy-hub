@@ -32,6 +32,14 @@ import StudentAttendance from "./pages/student/StudentAttendance";
 import StudentFees from "./pages/student/StudentFees";
 import StudentDocuments from "./pages/student/StudentDocuments";
 import StudentProfile from "./pages/student/StudentProfile";
+import TeacherDashboard from "./pages/teacher/TeacherDashboard";
+import TeacherClasses from "./pages/teacher/TeacherClasses";
+import TeacherAttendanceMark from "./pages/teacher/TeacherAttendanceMark";
+import TeacherStudents from "./pages/teacher/TeacherStudents";
+import TeacherSalary from "./pages/teacher/TeacherSalary";
+import TeacherDocuments from "./pages/teacher/TeacherDocuments";
+import TeacherMyAttendance from "./pages/teacher/TeacherMyAttendance";
+import TeacherProfile from "./pages/teacher/TeacherProfile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -72,6 +80,14 @@ const App = () => (
               <Route path="/student/fees" element={<StudentFees />} />
               <Route path="/student/documents" element={<StudentDocuments />} />
               <Route path="/student/profile" element={<StudentProfile />} />
+              <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
+              <Route path="/teacher/classes" element={<TeacherClasses />} />
+              <Route path="/teacher/attendance" element={<TeacherAttendanceMark />} />
+              <Route path="/teacher/students" element={<TeacherStudents />} />
+              <Route path="/teacher/salary" element={<TeacherSalary />} />
+              <Route path="/teacher/documents" element={<TeacherDocuments />} />
+              <Route path="/teacher/my-attendance" element={<TeacherMyAttendance />} />
+              <Route path="/teacher/profile" element={<TeacherProfile />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
