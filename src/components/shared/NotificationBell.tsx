@@ -9,14 +9,40 @@ const NotificationBell = () => {
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
-    const fetchUnread = async () => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let mounted = true;
+
+    const fetchUnread = async (userId: string) => {
       const { count } = await supabase
         .from("notifications")
         .select("*", { count: "exact", head: true })
+        .eq("user_id", userId)
         .eq("read", false);
-      setUnreadCount(count || 0);
+      if (mounted) setUnreadCount(count || 0);
     };
-    fetchUnread();
+
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      await fetchUnread(user.id);
+
+      channel = supabase
+        .channel("notifications-bell")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
+          () => fetchUnread(user.id)
+        )
+        .subscribe();
+    };
+
+    init();
+
+    return () => {
+      mounted = false;
+      if (channel) supabase.removeChannel(channel);
+    };
   }, []);
 
   return (
