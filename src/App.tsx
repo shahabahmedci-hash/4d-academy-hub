@@ -40,6 +40,7 @@ import TeacherSalary from "./pages/teacher/TeacherSalary";
 import TeacherDocuments from "./pages/teacher/TeacherDocuments";
 import TeacherMyAttendance from "./pages/teacher/TeacherMyAttendance";
 import TeacherProfile from "./pages/teacher/TeacherProfile";
+import Notifications from "./pages/Notifications";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -88,6 +89,7 @@ const App = () => (
               <Route path="/teacher/documents" element={<TeacherDocuments />} />
               <Route path="/teacher/my-attendance" element={<TeacherMyAttendance />} />
               <Route path="/teacher/profile" element={<TeacherProfile />} />
+              <Route path="/notifications" element={<Notifications />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
