@@ -11,6 +11,7 @@ import NotificationBell from "@/components/shared/NotificationBell";
 import ThemeToggle from "@/components/shared/ThemeToggle";
 import BottomNav from "@/components/shared/BottomNav";
 import { Skeleton } from "@/components/ui/skeleton";
+import AIInsightsCard from "@/components/admin/AIInsightsCard";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -219,6 +220,8 @@ const AdminDashboard = () => {
             </div>
           </CardContent>
         </Card>
+
+        <AIInsightsCard />
       </div>
 
       <BottomNav role="admin" />
