@@ -178,6 +178,7 @@ export type Database = {
           frequency: string
           id: string
           label: string
+          last_run_at: string | null
           task_key: string
           updated_at: string
           updated_by: string | null
@@ -191,6 +192,7 @@ export type Database = {
           frequency?: string
           id?: string
           label: string
+          last_run_at?: string | null
           task_key: string
           updated_at?: string
           updated_by?: string | null
@@ -204,6 +206,7 @@ export type Database = {
           frequency?: string
           id?: string
           label?: string
+          last_run_at?: string | null
           task_key?: string
           updated_at?: string
           updated_by?: string | null
