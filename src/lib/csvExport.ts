@@ -1,9 +1,13 @@
+import { storePreviewData } from "./downloadPreview";
+
 export const formatDateForExport = (dateStr: string | null | undefined): string => {
   if (!dateStr) return "";
+  // Parse YYYY-MM-DD directly without timezone conversion to avoid date shifts
   const isoMatch = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (isoMatch) {
     return `${isoMatch[3].padStart(2, "0")}/${isoMatch[2].padStart(2, "0")}/${isoMatch[1]}`;
   }
+  // Fallback for other formats
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return dateStr;
   const day = d.getDate().toString().padStart(2, "0");
@@ -36,11 +40,12 @@ export const exportToCSV = (
   );
 
   const csvContent = [headerRow, ...dataRows].join("\n");
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `${filename}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
+
+  storePreviewData({
+    type: "csv",
+    content: csvContent,
+    filename: `${filename}.csv`,
+    columns,
+    rows: data,
+  });
 };
