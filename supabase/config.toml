@@ -1,10 +1,25 @@
 project_id = "fchnqcxlgssjbrfeqpuf"
 
-[functions.automation-cron]
-verify_jwt = false
-
-[functions.generate-recurring]
-verify_jwt = false
-
-[functions.ai-insights]
+[functions.ai-analytics]
 verify_jwt = true
+
+[functions.import-students]
+verify_jwt = false
+
+[functions.import-teachers]
+verify_jwt = false
+
+[functions.process-recurring-templates]
+verify_jwt = false
+
+[functions.auto-mark-overdue]
+verify_jwt = false
+
+[functions.send-fee-reminders]
+verify_jwt = false
+
+[functions.auto-attendance-summary]
+verify_jwt = false
+
+[functions.automation-dispatcher]
+verify_jwt = false
