@@ -86,7 +86,7 @@ const TeacherProfile = () => {
           </Card>
         )}
 
-        <Button variant="outline" className="w-full" onClick={() => navigate("/admin/edit-profile")}>Edit Profile</Button>
+        <Button variant="outline" className="w-full" onClick={() => profile?.id && navigate(`/admin/profile/${profile.id}`)}>Edit Profile</Button>
       </div>
       <BottomNav role="teacher" />
     </div>

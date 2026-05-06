@@ -1,199 +1,195 @@
 import { useEffect, useState } from "react";
+import BottomNav from "@/components/shared/BottomNav";
+import PageSkeleton from "@/components/shared/PageSkeleton";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ArrowLeft, Clock, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
-import BottomNav from "@/components/shared/BottomNav";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
+import { AddClassDialog } from "@/components/admin/AddClassDialog";
+import { EditClassDialog } from "@/components/admin/EditClassDialog";
 
-const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
-interface ClassRow {
+interface Class {
   id: string;
   subject: string;
-  class: string | null;
-  section: string | null;
   day_of_week: number;
   start_time: string;
   end_time: string;
   room_location: string | null;
-  teacher_name: string | null;
   teacher_id: string | null;
+  teacher_name: string | null;
+  class: string | null;
+  section: string | null;
 }
 
 const Classes = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [classes, setClasses] = useState<ClassRow[]>([]);
+  const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [activeDay, setActiveDay] = useState(String(new Date().getDay()));
+  const [selectedClass, setSelectedClass] = useState<Class | null>(null);
 
-  // Form state
-  const [subject, setSubject] = useState("");
-  const [className, setClassName] = useState("");
-  const [section, setSection] = useState("");
-  const [dayOfWeek, setDayOfWeek] = useState("1");
-  const [startTime, setStartTime] = useState("09:00");
-  const [endTime, setEndTime] = useState("10:00");
-  const [room, setRoom] = useState("");
-  const [teacherName, setTeacherName] = useState("");
+  const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
   useEffect(() => {
-    loadClasses();
+    const init = async () => {
+      await checkAuth();
+      await loadClasses();
+    };
+    init();
   }, []);
 
+  const checkAuth = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      navigate("/");
+      return;
+    }
+
+    const [adminResult, coAdminResult] = await Promise.all([
+      supabase.rpc("is_admin"),
+      supabase.rpc("is_co_admin")
+    ]);
+    
+    if (!adminResult.data && !coAdminResult.data) {
+      navigate("/student/dashboard");
+    }
+  };
+
   const loadClasses = async () => {
-    const { data } = await supabase
-      .from("classes")
-      .select("*")
-      .order("start_time");
-    setClasses(data || []);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase
+        .from("classes")
+        .select("*")
+        .order("day_of_week", { ascending: true })
+        .order("start_time", { ascending: true });
+
+      if (error) throw error;
+      setClasses(data || []);
+    } catch (error) {
+      console.error("Error loading classes:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load classes",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const addClass = async () => {
-    if (!subject) {
-      toast({ title: "Error", description: "Subject is required", variant: "destructive" });
-      return;
-    }
-
-    const { error } = await supabase.from("classes").insert({
-      subject,
-      class: className || null,
-      section: section || null,
-      day_of_week: parseInt(dayOfWeek),
-      start_time: startTime,
-      end_time: endTime,
-      room_location: room || null,
-      teacher_name: teacherName || null,
+  const formatTime = (time: string) => {
+    return new Date(`2000-01-01T${time}`).toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
     });
+  };
 
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-      return;
+  const groupedClasses = classes.reduce((acc, cls) => {
+    const day = daysOfWeek[cls.day_of_week];
+    if (!acc[day]) {
+      acc[day] = [];
     }
+    acc[day].push(cls);
+    return acc;
+  }, {} as Record<string, Class[]>);
 
-    toast({ title: "Class added" });
-    setDialogOpen(false);
-    resetForm();
-    loadClasses();
-  };
-
-  const deleteClass = async (id: string) => {
-    const { error } = await supabase.from("classes").delete().eq("id", id);
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-      return;
-    }
-    toast({ title: "Class deleted" });
-    loadClasses();
-  };
-
-  const resetForm = () => {
-    setSubject(""); setClassName(""); setSection("");
-    setDayOfWeek("1"); setStartTime("09:00"); setEndTime("10:00");
-    setRoom(""); setTeacherName("");
-  };
-
-  const classesByDay = classes.filter(c => c.day_of_week === parseInt(activeDay));
+  if (loading) {
+    return <PageSkeleton />;
+  }
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <div className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
-        <div className="flex items-center justify-between p-4">
-          <div className="flex items-center gap-3">
+    <div className="min-h-screen bg-background">
+      <header className="border-b bg-card">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate("/admin/dashboard")}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <h1 className="text-lg font-bold">Class Schedule</h1>
+            <div className="flex-1">
+              <h1 className="text-2xl font-bold">Class Schedule</h1>
+              <p className="text-sm text-muted-foreground">Manage class timetable</p>
+            </div>
+            <AddClassDialog onClassAdded={loadClasses} />
           </div>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Add</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Add Class</DialogTitle></DialogHeader>
-              <div className="space-y-3">
-                <div><Label>Subject *</Label><Input value={subject} onChange={e => setSubject(e.target.value)} /></div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div><Label>Class</Label><Input value={className} onChange={e => setClassName(e.target.value)} placeholder="e.g. 10" /></div>
-                  <div><Label>Section</Label><Input value={section} onChange={e => setSection(e.target.value)} placeholder="e.g. A" /></div>
-                </div>
-                <div>
-                  <Label>Day</Label>
-                  <Select value={dayOfWeek} onValueChange={setDayOfWeek}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {DAYS.map((d, i) => <SelectItem key={i} value={String(i)}>{d}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div><Label>Start Time</Label><Input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} /></div>
-                  <div><Label>End Time</Label><Input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} /></div>
-                </div>
-                <div><Label>Room</Label><Input value={room} onChange={e => setRoom(e.target.value)} /></div>
-                <div><Label>Teacher Name</Label><Input value={teacherName} onChange={e => setTeacherName(e.target.value)} /></div>
-                <Button className="w-full" onClick={addClass}>Add Class</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
         </div>
-      </div>
+      </header>
 
-      <div className="p-4 space-y-4">
-        <Tabs value={activeDay} onValueChange={setActiveDay}>
-          <TabsList className="w-full overflow-x-auto flex">
-            {DAYS.map((d, i) => (
-              <TabsTrigger key={i} value={String(i)} className="flex-1 text-xs px-1">
-                {d.slice(0, 3)}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-
-        <p className="text-sm text-muted-foreground">{DAYS[parseInt(activeDay)]} — {classesByDay.length} classes</p>
-
-        {classesByDay.length === 0 ? (
-          <Card><CardContent className="p-8 text-center text-muted-foreground">No classes scheduled</CardContent></Card>
-        ) : (
-          <div className="space-y-3">
-            {classesByDay.map(c => (
-              <Card key={c.id}>
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-semibold">{c.subject}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {c.start_time?.slice(0, 5)} – {c.end_time?.slice(0, 5)}
-                      </p>
-                      <div className="flex gap-1 mt-1 flex-wrap">
-                        {c.class && <Badge variant="secondary">{c.class}{c.section ? `-${c.section}` : ""}</Badge>}
-                        {c.room_location && <Badge variant="outline">{c.room_location}</Badge>}
+      <main className="container mx-auto px-4 py-8">
+        {Object.entries(groupedClasses).map(([day, dayClasses]) => (
+          <Card key={day} className="mb-6">
+            <CardHeader>
+              <CardTitle>{day}</CardTitle>
+              <CardDescription>{dayClasses.length} classes scheduled</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {dayClasses.map((cls) => (
+                  <Card key={cls.id} className="hover:shadow-md transition-shadow">
+                    <CardHeader>
+                      <CardTitle className="text-lg">{cls.subject}</CardTitle>
+                      {cls.teacher_name && (
+                        <CardDescription>By {cls.teacher_name}</CardDescription>
+                      )}
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <span>
+                          {formatTime(cls.start_time)} - {formatTime(cls.end_time)}
+                        </span>
                       </div>
-                      {c.teacher_name && <p className="text-xs text-muted-foreground mt-1">Teacher: {c.teacher_name}</p>}
-                    </div>
-                    <Button variant="ghost" size="icon" onClick={() => deleteClass(c.id)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
+                      {cls.room_location && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <MapPin className="h-4 w-4 text-muted-foreground" />
+                          <span>{cls.room_location}</span>
+                        </div>
+                      )}
+                      {(cls.class || cls.section) && (
+                        <div className="text-sm text-muted-foreground">
+                          {cls.class && <span>Class {cls.class}</span>}
+                          {cls.class && cls.section && <span> - </span>}
+                          {cls.section && <span>Batch {cls.section}</span>}
+                        </div>
+                      )}
+                      <Button 
+                        variant="outline" 
+                        className="w-full mt-4" 
+                        size="sm"
+                        onClick={() => setSelectedClass(cls)}
+                      >
+                        Edit Class
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
 
+        {classes.length === 0 && (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <p className="text-muted-foreground mb-4">No classes scheduled yet</p>
+              <AddClassDialog onClassAdded={loadClasses} />
+            </CardContent>
+          </Card>
+        )}
+      </main>
+
+      {selectedClass && (
+        <EditClassDialog
+          classData={selectedClass}
+          open={!!selectedClass}
+          onOpenChange={(open) => !open && setSelectedClass(null)}
+          onClassUpdated={loadClasses}
+        />
+      )}
       <BottomNav role="admin" />
+      <div className="h-16 md:hidden" />
     </div>
   );
 };

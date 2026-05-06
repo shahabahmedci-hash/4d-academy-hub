@@ -93,7 +93,7 @@ const StudentProfile = () => {
               <p className="text-sm text-muted-foreground">{profile?.email}</p>
               {student?.student_id && <Badge className="mt-1" variant="secondary">{student.student_id}</Badge>}
             </div>
-            <Button size="sm" variant="outline" onClick={() => navigate("/admin/edit-profile")}>
+            <Button size="sm" variant="outline" onClick={async () => { const { data: { user } } = await supabase.auth.getUser(); if (user) navigate(`/admin/profile/${user.id}`); }}>
               <Edit className="h-4 w-4 mr-1" /> Edit
             </Button>
           </CardContent>
