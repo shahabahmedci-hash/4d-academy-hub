@@ -129,7 +129,7 @@ export const AddTeacherDialog = ({ onTeacherAdded }: AddTeacherDialogProps) => {
       if (Object.keys(profileUpdates).length > 0) {
         const { error: profileError } = await supabase
           .from("profiles")
-          .update(profileUpdates)
+          .update(profileUpdates as any)
           .eq("id", authData.user.id);
 
         if (profileError) throw profileError;
