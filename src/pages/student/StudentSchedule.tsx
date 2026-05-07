@@ -29,8 +29,8 @@ const StudentSchedule = () => {
   const [day, setDay] = useState(String(new Date().getDay()));
 
   useEffect(() => {
-    load();
-  }, []);
+    if (profileCompleted) load();
+  }, [profileCompleted]);
 
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser();
