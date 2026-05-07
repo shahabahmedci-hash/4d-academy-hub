@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, FileText, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useProfileCompletionGate } from "@/hooks/useProfileCompletionGate";
 
 interface Doc {
   id: string;
@@ -21,12 +22,13 @@ interface Doc {
 const StudentDocuments = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { loading: gateLoading, profileCompleted } = useProfileCompletionGate();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    load();
-  }, []);
+    if (profileCompleted) load();
+  }, [profileCompleted]);
 
   const load = async () => {
     const { data, error } = await supabase
@@ -47,7 +49,7 @@ const StudentDocuments = () => {
     window.open(data.signedUrl, "_blank");
   };
 
-  if (loading) return <PageSkeleton />;
+  if (gateLoading || loading) return <PageSkeleton />;
 
   return (
     <div className="min-h-screen bg-background pb-20">
