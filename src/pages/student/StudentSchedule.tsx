@@ -51,7 +51,7 @@ const StudentSchedule = () => {
     setLoading(false);
   };
 
-  if (loading) return <PageSkeleton />;
+  if (gateLoading || loading) return <PageSkeleton />;
 
   return (
     <div className="min-h-screen bg-background pb-20">
