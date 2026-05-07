@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, DollarSign } from "lucide-react";
+import { useProfileCompletionGate } from "@/hooks/useProfileCompletionGate";
 
 interface Fee {
   id: string;
@@ -20,12 +21,13 @@ interface Fee {
 
 const StudentFees = () => {
   const navigate = useNavigate();
+  const { loading: gateLoading, profileCompleted } = useProfileCompletionGate();
   const [fees, setFees] = useState<Fee[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    load();
-  }, []);
+    if (profileCompleted) load();
+  }, [profileCompleted]);
 
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -43,7 +45,7 @@ const StudentFees = () => {
     setLoading(false);
   };
 
-  if (loading) return <PageSkeleton />;
+  if (gateLoading || loading) return <PageSkeleton />;
 
   const pending = fees.filter((f) => f.status === "pending").reduce((s, f) => s + Number(f.amount), 0);
   const paid = fees.filter((f) => f.status === "paid").reduce((s, f) => s + Number(f.amount), 0);

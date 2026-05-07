@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ArrowLeft, Calendar, Clock, MapPin } from "lucide-react";
+import { useProfileCompletionGate } from "@/hooks/useProfileCompletionGate";
 
 interface Cls {
   id: string;
@@ -22,13 +23,14 @@ const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const StudentSchedule = () => {
   const navigate = useNavigate();
+  const { loading: gateLoading, profileCompleted } = useProfileCompletionGate();
   const [classes, setClasses] = useState<Cls[]>([]);
   const [loading, setLoading] = useState(true);
   const [day, setDay] = useState(String(new Date().getDay()));
 
   useEffect(() => {
-    load();
-  }, []);
+    if (profileCompleted) load();
+  }, [profileCompleted]);
 
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -49,7 +51,7 @@ const StudentSchedule = () => {
     setLoading(false);
   };
 
-  if (loading) return <PageSkeleton />;
+  if (gateLoading || loading) return <PageSkeleton />;
 
   return (
     <div className="min-h-screen bg-background pb-20">
