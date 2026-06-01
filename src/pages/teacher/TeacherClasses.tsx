@@ -35,7 +35,7 @@ const TeacherClasses = () => {
     setLoading(false);
   };
 
-  if (loading) return <PageSkeleton />;
+  if (gateLoading || loading) return <PageSkeleton />;
   const today = new Date().getDay();
 
   return (
