@@ -37,7 +37,7 @@ const TeacherStudents = () => {
     setLoading(false);
   };
 
-  if (loading) return <PageSkeleton />;
+  if (gateLoading || loading) return <PageSkeleton />;
   const filtered = students.filter((s) => {
     const name = (s.profiles as any)?.full_name?.toLowerCase() || "";
     return name.includes(search.toLowerCase()) || s.student_id?.toLowerCase().includes(search.toLowerCase());
