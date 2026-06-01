@@ -91,7 +91,7 @@ const TeacherAttendanceMark = () => {
     } finally { setSaving(false); }
   };
 
-  if (loading) return <PageSkeleton />;
+  if (gateLoading || loading) return <PageSkeleton />;
   const present = Object.values(attendance).filter((s) => s === "present").length;
   const absent = Object.values(attendance).filter((s) => s === "absent").length;
 
