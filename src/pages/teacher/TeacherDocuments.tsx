@@ -34,7 +34,7 @@ const TeacherDocuments = () => {
     }
   };
 
-  if (loading) return <PageSkeleton />;
+  if (gateLoading || loading) return <PageSkeleton />;
 
   return (
     <div className="min-h-screen bg-background pb-20">
