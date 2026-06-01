@@ -13,10 +13,12 @@ import { ArrowLeft, Calendar as CalendarIcon, Check, X, Save } from "lucide-reac
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useTeacherProfileGate } from "@/hooks/useTeacherProfileGate";
 
 const TeacherAttendanceMark = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { loading: gateLoading, profileCompleted } = useTeacherProfileGate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [classes, setClasses] = useState<any[]>([]);
@@ -26,7 +28,7 @@ const TeacherAttendanceMark = () => {
   const [attendance, setAttendance] = useState<Record<string, string>>({});
   const [existing, setExisting] = useState(false);
 
-  useEffect(() => { loadClasses(); }, []);
+  useEffect(() => { if (profileCompleted) loadClasses(); }, [profileCompleted]);
   useEffect(() => { if (selectedClass) loadStudents(); }, [selectedClass, date]);
 
   const loadClasses = async () => {
@@ -89,7 +91,7 @@ const TeacherAttendanceMark = () => {
     } finally { setSaving(false); }
   };
 
-  if (loading) return <PageSkeleton />;
+  if (gateLoading || loading) return <PageSkeleton />;
   const present = Object.values(attendance).filter((s) => s === "present").length;
   const absent = Object.values(attendance).filter((s) => s === "absent").length;
 
