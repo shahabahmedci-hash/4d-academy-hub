@@ -8,15 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ArrowLeft, Clock, MapPin } from "lucide-react";
+import { useTeacherProfileGate } from "@/hooks/useTeacherProfileGate";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 const TeacherClasses = () => {
   const navigate = useNavigate();
+  const { loading: gateLoading, profileCompleted } = useTeacherProfileGate();
   const [loading, setLoading] = useState(true);
   const [classes, setClasses] = useState<any[]>([]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { if (profileCompleted) load(); }, [profileCompleted]);
 
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser();
