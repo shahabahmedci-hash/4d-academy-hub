@@ -7,14 +7,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Download, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useTeacherProfileGate } from "@/hooks/useTeacherProfileGate";
 
 const TeacherDocuments = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { loading: gateLoading, profileCompleted } = useTeacherProfileGate();
   const [loading, setLoading] = useState(true);
   const [docs, setDocs] = useState<any[]>([]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { if (profileCompleted) load(); }, [profileCompleted]);
 
   const load = async () => {
     const { data } = await supabase.from("documents").select("*").order("created_at", { ascending: false });
