@@ -7,14 +7,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Search } from "lucide-react";
+import { useTeacherProfileGate } from "@/hooks/useTeacherProfileGate";
 
 const TeacherStudents = () => {
   const navigate = useNavigate();
+  const { loading: gateLoading, profileCompleted } = useTeacherProfileGate();
   const [loading, setLoading] = useState(true);
   const [students, setStudents] = useState<any[]>([]);
   const [search, setSearch] = useState("");
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { if (profileCompleted) load(); }, [profileCompleted]);
 
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser();
