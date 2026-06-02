@@ -20,6 +20,7 @@ const TeacherAttendanceMark = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { loading: gateLoading, profileCompleted } = useTeacherProfileGate();
+  const { isDateFrozen } = useFinancialYearFreeze();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [classes, setClasses] = useState<any[]>([]);
