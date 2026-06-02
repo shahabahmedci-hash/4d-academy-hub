@@ -430,6 +430,11 @@ const AdminAttendance = () => {
             records={studentAttendanceHistory}
             studentName={filterStudentName}
             onDelete={async (id: string) => {
+              const rec = studentAttendanceHistory.find((r) => r.id === id);
+              if (rec && isDateFrozen(rec.date)) {
+                toast({ variant: "destructive", title: "Frozen", description: "Cannot delete frozen-period record." });
+                return;
+              }
               const { error } = await supabase.from("attendance").delete().eq("id", id);
               if (error) {
                 toast({ variant: "destructive", title: "Error", description: "Failed to delete record" });
