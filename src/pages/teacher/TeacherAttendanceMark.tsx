@@ -14,6 +14,7 @@ import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useTeacherProfileGate } from "@/hooks/useTeacherProfileGate";
+import { useFinancialYearFreeze } from "@/hooks/useFinancialYearFreeze";
 
 const TeacherAttendanceMark = () => {
   const navigate = useNavigate();
