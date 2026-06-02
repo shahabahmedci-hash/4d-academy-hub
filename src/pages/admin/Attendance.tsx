@@ -15,6 +15,7 @@ import { format, subWeeks, addWeeks, startOfWeek, addDays } from "date-fns";
 import { exportToCSV, formatDateForExport } from "@/lib/csvExport";
 import AttendancePieChart from "@/components/student/AttendancePieChart";
 import AttendanceMonthlyBreakdown from "@/components/student/AttendanceMonthlyBreakdown";
+import { useFinancialYearFreeze } from "@/hooks/useFinancialYearFreeze";
 
 interface Student {
   id: string;
@@ -130,6 +131,7 @@ const AdminAttendance = () => {
   const [selectedClass, setSelectedClass] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [attendance, setAttendance] = useState<Record<string, string>>({});
+  const { isDateFrozen } = useFinancialYearFreeze();
 
   useEffect(() => {
     checkAuth();
@@ -356,6 +358,10 @@ const AdminAttendance = () => {
       });
       return;
     }
+    if (isDateFrozen(selectedDate)) {
+      toast({ variant: "destructive", title: "Frozen period", description: "This date is in a frozen financial year." });
+      return;
+    }
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -424,6 +430,11 @@ const AdminAttendance = () => {
             records={studentAttendanceHistory}
             studentName={filterStudentName}
             onDelete={async (id: string) => {
+              const rec = studentAttendanceHistory.find((r) => r.id === id);
+              if (rec && isDateFrozen(rec.date)) {
+                toast({ variant: "destructive", title: "Frozen", description: "Cannot delete frozen-period record." });
+                return;
+              }
               const { error } = await supabase.from("attendance").delete().eq("id", id);
               if (error) {
                 toast({ variant: "destructive", title: "Error", description: "Failed to delete record" });

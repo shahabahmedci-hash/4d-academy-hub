@@ -16,6 +16,7 @@ import logo from "@/assets/4d-academy-logo.jpg";
 import TeacherAttendancePieChart from "@/components/teacher/TeacherAttendancePieChart";
 import TeacherAttendanceMonthlyBreakdown from "@/components/teacher/TeacherAttendanceMonthlyBreakdown";
 import { ImportTeacherAttendanceDialog } from "@/components/admin/ImportTeacherAttendanceDialog";
+import { useFinancialYearFreeze } from "@/hooks/useFinancialYearFreeze";
 
 interface TeacherRecord {
   teacherId: string;
@@ -136,6 +137,7 @@ const TeacherAttendance = () => {
   const [records, setRecords] = useState<TeacherRecord[]>([]);
   const [teacherHistory, setTeacherHistory] = useState<any[]>([]);
   const [teacherName, setTeacherName] = useState<string>("");
+  const { isDateFrozen } = useFinancialYearFreeze();
 
   useEffect(() => {
     checkAuth();
@@ -280,6 +282,10 @@ const TeacherAttendance = () => {
 
   const handleSave = async () => {
     if (!selectedClass) return;
+    if (isDateFrozen(selectedDate)) {
+      toast({ variant: "destructive", title: "Frozen period", description: "This date is in a frozen financial year." });
+      return;
+    }
     setSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -307,6 +313,11 @@ const TeacherAttendance = () => {
   };
 
   const handleDeleteTeacherRecord = async (id: string) => {
+    const rec = teacherHistory.find((r: any) => r.id === id);
+    if (rec && isDateFrozen(rec.date)) {
+      toast({ variant: "destructive", title: "Frozen", description: "Cannot delete frozen-period record." });
+      return;
+    }
     const { error } = await supabase.from("teacher_attendance").delete().eq("id", id);
     if (error) {
       toast({ variant: "destructive", title: "Error", description: "Failed to delete record" });
