@@ -358,6 +358,10 @@ const AdminAttendance = () => {
       });
       return;
     }
+    if (isDateFrozen(selectedDate)) {
+      toast({ variant: "destructive", title: "Frozen period", description: "This date is in a frozen financial year." });
+      return;
+    }
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
