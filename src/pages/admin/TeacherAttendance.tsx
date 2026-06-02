@@ -16,6 +16,7 @@ import logo from "@/assets/4d-academy-logo.jpg";
 import TeacherAttendancePieChart from "@/components/teacher/TeacherAttendancePieChart";
 import TeacherAttendanceMonthlyBreakdown from "@/components/teacher/TeacherAttendanceMonthlyBreakdown";
 import { ImportTeacherAttendanceDialog } from "@/components/admin/ImportTeacherAttendanceDialog";
+import { useFinancialYearFreeze } from "@/hooks/useFinancialYearFreeze";
 
 interface TeacherRecord {
   teacherId: string;
