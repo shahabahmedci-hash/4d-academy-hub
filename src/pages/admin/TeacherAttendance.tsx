@@ -137,6 +137,7 @@ const TeacherAttendance = () => {
   const [records, setRecords] = useState<TeacherRecord[]>([]);
   const [teacherHistory, setTeacherHistory] = useState<any[]>([]);
   const [teacherName, setTeacherName] = useState<string>("");
+  const { isDateFrozen } = useFinancialYearFreeze();
 
   useEffect(() => {
     checkAuth();
