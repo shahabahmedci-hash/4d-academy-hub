@@ -75,11 +75,15 @@ const TeacherAttendanceMark = () => {
   };
 
   const save = async () => {
+    const dateStr = format(date, "yyyy-MM-dd");
+    if (isDateFrozen(dateStr)) {
+      toast({ title: "Frozen period", description: "This date is in a frozen financial year.", variant: "destructive" });
+      return;
+    }
     setSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const dateStr = format(date, "yyyy-MM-dd");
       if (existing) await supabase.from("attendance").delete().eq("class_id", selectedClass).eq("date", dateStr);
       const records = Object.entries(attendance).map(([student_id, status]) => ({
         student_id, class_id: selectedClass, date: dateStr, status: status as any, marked_by: user.id,
