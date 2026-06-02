@@ -15,6 +15,7 @@ import { format, subWeeks, addWeeks, startOfWeek, addDays } from "date-fns";
 import { exportToCSV, formatDateForExport } from "@/lib/csvExport";
 import AttendancePieChart from "@/components/student/AttendancePieChart";
 import AttendanceMonthlyBreakdown from "@/components/student/AttendanceMonthlyBreakdown";
+import { useFinancialYearFreeze } from "@/hooks/useFinancialYearFreeze";
 
 interface Student {
   id: string;
