@@ -1,137 +1,65 @@
 
-# 4D Academy Hub — Parity Plan vs Reference Repo
+## Goal
 
-I cloned the public repo `shahabahmedci-hash/d-academy-connect` and compared it against our current build file-by-file (pages, components, hooks, libs, edge functions, migrations, config). Below are the concrete gaps and a batched implementation plan.
+Bring `/admin/automations` to visual + functional parity with the reference repo (`shahabahmedci-hash/d-academy-connect`). Current page is a stripped-down version: it only exposes daily/weekly/monthly, has a raw cron text field, no Run Now, no Recurring Dues templates section, and a bare header.
 
-## Gap Summary
+## Gaps vs reference
 
-### Edge functions (ours vs reference)
-| Reference function | Ours | Status |
-|---|---|---|
-| `process-recurring-templates` | `generate-recurring` | Different name + IST timezone logic + supports fortnightly/quarterly/yearly + expense templates — **rewrite** |
-| `automation-dispatcher` | `automation-cron` | Reference dispatches 4 tasks (recurring, overdue, reminders, attendance summary) — **expand** |
-| `auto-mark-overdue` | missing | **Add** |
-| `send-fee-reminders` | missing | **Add** |
-| `auto-attendance-summary` | missing | **Add** |
-| `import-students` | missing | **Add** (server-side bulk insert with profiles + user_roles) |
-| `import-teachers` | missing | **Add** |
-| `ai-analytics` | `ai-insights` | Reference uses richer prompts + multi-section output — **expand** |
+### Automated Tasks card
+- Only 3 frequencies → reference supports **daily, weekly, fortnightly, monthly, quarterly, half_yearly, yearly**.
+- Raw cron `<Input>` → reference uses **Hour (12h labels) + Minute (00/15/30/45)** pickers and builds the cron itself.
+- No **Day of Week** name dropdown (Sun–Sat) for weekly/fortnightly.
+- No **Day of Month** dropdown (1–28) for monthly/quarterly/half_yearly/yearly.
+- No **Run Now** button per task (with confirm dialog).
+- No friendly label mapping (`process-recurring-templates` → "Auto-Generate Dues", etc.).
+- No auto-built human description ("Runs monthly on 5th at 9:00 AM").
+- Optimistic update + rollback on failure missing.
+- Header lacks logo, NotificationBell, ThemeToggle.
+- No mobile card layout — only one responsive grid.
 
-### Frontend components missing
-- `components/admin/AddClassDialog.tsx`, `EditClassDialog.tsx`
-- `components/admin/BulkPromotionDialog.tsx` (year-end class promotion)
-- `components/admin/DashboardAutomationCard.tsx` (run automation tasks from dashboard)
-- `components/admin/AIInsightsPanel.tsx` (full panel, ours is a small card)
-- `components/admin/FinanceMonthlyBreakdown.tsx`, `FinancePieChart.tsx`
-- `components/admin/ImportStudentsDialog.tsx`, `ImportTeachersDialog.tsx`, `ImportFeesDialog.tsx`, `ImportSalariesDialog.tsx`, `ImportExpensesDialog.tsx`, `ImportAttendanceDialog.tsx`, `ImportTeacherAttendanceDialog.tsx`
-- `components/student/AttendanceMonthlyBreakdown.tsx`, `AttendancePieChart.tsx`, `AttendanceRecordsList.tsx`
-- `components/teacher/ClassDetailsDialog.tsx`, `TeacherAttendanceMonthlyBreakdown.tsx`, `TeacherAttendancePieChart.tsx`, `TeacherAttendanceRecordsList.tsx`
-- `components/shared/AdBanner.tsx`, `AppTimeIndicator.tsx`, `AvatarUpload.tsx`, `CameraCaptureDialog.tsx`
-- Marketing: `components/Hero.tsx`, `Navbar.tsx`, `About.tsx`, `Courses.tsx`, `Features.tsx`, `Contact.tsx`, `Footer.tsx` (used on `/home` Index landing page)
+### Recurring Dues Setup card (completely missing)
+- Tabs: Fees / Salaries / Expenses, each backed by `recurring_templates` table.
+- Add / Edit / Delete dialog with fields: type, student/teacher/admin, amount, interval (monthly/quarterly/yearly), day_of_month, notes, category (for expenses), is_active toggle.
+- Admin-personal expense category requires selecting an admin/co-admin (only main admin sees admins list).
+- Desktop table + mobile cards, inline is_active switch with optimistic update.
+- Filters students to exclude teachers and admin/co-admin users, excludes archived profiles.
 
-### Libs / hooks missing
-- `lib/csvImport.ts` (quote-aware CSV, IST date normalization, currency cleaning, email validation)
-- `lib/csvExport.ts` — ours exists; verify parity
-- `lib/downloadPreview.ts` + `pages/PreviewDownload.tsx` (in-app preview before download)
-- `lib/generateReceipt.ts`, `generateSalaryReceipt.ts` (jsPDF receipts)
-- `lib/invokeEdgeFunction.ts` (typed wrapper with error normalization)
-- `lib/runAutomationTask.ts` (client fallback for all 4 automation tasks when edge fails)
-- `lib/adConfig.ts`
-- `hooks/useProfileCompletionGate.ts` (student gate — redirects to /student/profile until completed)
-- `hooks/useTeacherProfileGate.ts` (teacher gate)
-- `hooks/useSignedAvatarUrl.ts` (signed URL for avatars bucket)
+### Auth
+- Reference gates the page with `is_admin || is_co_admin` and redirects non-admins to `/student/dashboard`. Ours only loads data.
 
-### Pages / routes missing or different
-- `/home` landing page (`pages/Index.tsx` with marketing components)
-- `/preview-download` route
-- Reference uses `/admin/profile/:id` instead of `/admin/edit-profile`
-- Reference adds extra teacher route `TeacherAttendanceView` separate from marking
-- Reference Auth.tsx contains role-specific mandatory fields on signup (father_name, class/section/stream for student; designation/subjects/joining_date for teacher; phone/address for everyone) — our Auth likely does not enforce these
+## Implementation
 
-### Database / behavioural differences
-- Reference `recurring_templates.interval` enum supports: `monthly`, `fortnightly`, `quarterly`, `yearly`, `daily`, `weekly` — ours assumed monthly/weekly/daily only
-- Reference also supports `type='expense'` recurring templates (we only have fee/salary)
-- Reference uses **IST (UTC+5:30)** for all schedule comparisons — ours uses UTC
-- Reference uses `month` value `YYYY-MM-01` (date string) — ours uses `YYYY-MM` label
-- Reference enforces `profile_completed` gating across student/teacher portals
-- Reference automation dispatcher runs hourly and matches by HH==scheduled_hour in IST
+### 1. Rewrite `src/pages/admin/Automations.tsx`
 
-### AI / Automation
-- Reference `ai-analytics` returns: financial summary, attendance trends, top defaulters, salary risk, suggested actions — multi-section JSON. Ours returns a flat `insights[]`. **Upgrade prompt + UI panel.**
-- Reference `DashboardAutomationCard` lets admin trigger each automation task on-demand and shows last-run time.
+Replace the file with a port of the reference component, adapted to our existing imports:
+- Keep our `BottomNav`, `PageSkeleton` patterns; add `NotificationBell` and `ThemeToggle` to header (already in project).
+- Skip the logo asset unless one exists at `@/assets/4d-academy-logo.jpg` — fall back to the existing header style if not.
+- Use `runAutomationTask` from `@/lib/runAutomationTask` (already in project) for Run Now.
+- Add auth gate via `supabase.rpc("is_admin")` + `is_co_admin`; redirect to `/student/dashboard` if neither.
+- Add the cron builders, parsers, friendly labels, description builder, optimistic update + rollback exactly as in reference.
+- Add the Automated Tasks desktop table + mobile cards.
+- Add the Recurring Dues Setup section (Tabs + Dialog + AlertDialog confirms) backed by `recurring_templates`, `students`, `teachers`, `profiles`, `user_roles`.
 
-### Visual / theming
-- Landing page (Hero, Features, Courses, About, Contact, Footer, Navbar) — entire marketing site missing
-- AdBanner shown above bottom nav on student/teacher dashboards
-- AvatarUpload + CameraCaptureDialog flows on profile pages
-- AppTimeIndicator (live IST clock chip in header)
+### 2. Verify prerequisites (read-only, no changes if present)
+- `recurring_templates` table exists in `src/integrations/supabase/types.ts` (used in dashboard automation card, so it should).
+- `src/lib/runAutomationTask.ts` exists (confirmed in tree).
+- Confirm `automation_settings.description` column accepts the auto-generated descriptions (it already does per current update calls).
 
----
+### 3. No changes to
+- `automation-dispatcher` edge function (already handles all 7 frequencies correctly).
+- `DashboardAutomationCard` (unchanged — it's the dashboard quick-toggle).
+- Routing / nav.
 
-## Batched Implementation Plan
+## Out of scope
+- Logo asset import — only if `@/assets/4d-academy-logo.jpg` is already present.
+- Any backend / RLS / dispatcher changes.
 
-### Batch A — Shared infra (libs + hooks)
-1. Add `lib/csvImport.ts`, `lib/invokeEdgeFunction.ts`, `lib/runAutomationTask.ts`, `lib/generateReceipt.ts`, `lib/generateSalaryReceipt.ts`, `lib/downloadPreview.ts`, `lib/adConfig.ts`.
-2. Add hooks `useProfileCompletionGate`, `useTeacherProfileGate`, `useSignedAvatarUrl`.
-3. Add shared components `AdBanner`, `AppTimeIndicator`, `AvatarUpload`, `CameraCaptureDialog`.
-4. Add `pages/PreviewDownload.tsx` + route.
+## Technical notes
 
-### Batch B — Database alignment (migration)
-1. Extend `recurring_templates.interval` to allow `fortnightly|quarterly|yearly` (text already, just remove any check constraint or add one).
-2. Allow `type='expense'` on `recurring_templates` (already text — verify).
-3. Add `automation_settings` rows for `auto-mark-overdue`, `send-fee-reminders`, `auto-attendance-summary`.
-4. Add column `last_run_at timestamptz` to `automation_settings` for dashboard display.
-5. Reschedule `pg_cron` to call new `automation-dispatcher` (hourly).
+```text
+parseCron("30 9 * * *")            → { hour: 9, minute: 30 }
+buildCron(9, 30, "monthly", _, 5)  → "30 9 5 * *"
+buildCron(9, 30, "quarterly", _, 5)→ "30 9 5 1,4,7,10 *"
+```
 
-### Batch C — Edge functions (replace + add)
-1. Add `process-recurring-templates` (port reference, IST, fortnightly/quarterly/yearly + expense type, idempotent).
-2. Add `auto-mark-overdue`.
-3. Add `send-fee-reminders` (creates notifications).
-4. Add `auto-attendance-summary` (creates notifications + summary rows).
-5. Replace `automation-cron` with `automation-dispatcher` calling all 4 above based on `automation_settings`.
-6. Add `import-students`, `import-teachers` (service-role bulk insert into profiles + students/teachers + user_roles).
-7. Upgrade `ai-insights` → `ai-analytics` with structured multi-section response.
-8. Update `supabase/config.toml` accordingly. Remove `automation-cron`/`generate-recurring` if no longer needed.
-
-### Batch D — Admin UI parity
-1. `AddClassDialog`, `EditClassDialog` and wire into `Classes.tsx`.
-2. `ImportStudentsDialog`, `ImportTeachersDialog`, `ImportFeesDialog`, `ImportSalariesDialog`, `ImportExpensesDialog`, `ImportAttendanceDialog`, `ImportTeacherAttendanceDialog` + buttons on each admin page.
-3. `BulkPromotionDialog` (year-end class promotion) on `Students.tsx`.
-4. `DashboardAutomationCard` + replace small `AIInsightsCard` with `AIInsightsPanel` on `AdminDashboard`.
-5. `FinanceMonthlyBreakdown` + `FinancePieChart` on `Analytics.tsx`.
-6. Add receipt download buttons (Fees, Salaries) using the new generators + PreviewDownload.
-7. Move admin profile edit to `/admin/profile/:id`.
-
-### Batch E — Student UI parity
-1. Replace student attendance UI with `AttendanceMonthlyBreakdown`, `AttendancePieChart`, `AttendanceRecordsList`.
-2. Apply `useProfileCompletionGate` on every student page.
-3. Add mandatory profile fields enforcement (father_name, DOB, address, emergency contact, class/section/stream) before `profile_completed=true`.
-4. Add `AvatarUpload` + `CameraCaptureDialog` on `Profile.tsx`.
-
-### Batch F — Teacher UI parity
-1. Add `ClassDetailsDialog`, `TeacherAttendanceMonthlyBreakdown`, `TeacherAttendancePieChart`, `TeacherAttendanceRecordsList`.
-2. Split teacher attendance: marking (`/teacher/attendance`) vs viewing own (`/teacher/my-attendance` already exists — port `TeacherAttendanceView`).
-3. Apply `useTeacherProfileGate`.
-4. Mandatory fields: designation, subjects[], joining_date, phone, address, emergency contact.
-
-### Batch G — Auth & landing
-1. Rewrite `Auth.tsx` to enforce role-specific mandatory fields at signup.
-2. Build marketing components (Hero, Navbar, Features, Courses, About, Contact, Footer) and `pages/Index.tsx` mounted at `/home`.
-3. Add `AdBanner` mounting on dashboards and `AppTimeIndicator` in headers.
-
-### Batch H — QA & polish
-1. Visual diff key pages against the live reference preview using the browser tool.
-2. Verify all imports/exports round-trip correctly (CSV templates downloadable from each import dialog).
-3. Verify automation dispatcher fires in IST and idempotency works (run twice, no duplicates).
-4. Verify AI Analytics renders all sections.
-
----
-
-## Notes on order & risk
-- Batch A and B are prerequisites for everything else.
-- Batch C must land with Batch B's migration to avoid runtime errors on new columns.
-- Batches D, E, F can be parallelized after A–C.
-- Batch G is mostly cosmetic — safe to do last.
-- Existing data is preserved; all migrations are additive.
-
-Approve and I'll begin with Batch A + B together (smallest blast radius), then Batch C.
+Frequencies list (value/label): daily, weekly, fortnightly, monthly, quarterly, half_yearly, yearly.
