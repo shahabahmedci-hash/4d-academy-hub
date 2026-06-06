@@ -36,18 +36,37 @@ const StudentSchedule = () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { navigate("/"); return; }
 
-    const { data: student } = await supabase.from("students").select("id").eq("user_id", user.id).maybeSingle();
+    const { data: student } = await supabase
+      .from("students")
+      .select("id, class, section")
+      .eq("user_id", user.id)
+      .maybeSingle();
     if (!student) { setLoading(false); return; }
 
+    // Primary: classes matching student's class + section (admin-assigned)
+    const byClassSection = student.class
+      ? supabase
+          .from("classes")
+          .select("*")
+          .eq("class", student.class)
+          .eq("section", student.section || "")
+          .order("start_time")
+      : Promise.resolve({ data: [] as any[] });
+
+    // Secondary: explicit enrollments
     const { data: enrolls } = await supabase
       .from("class_enrollments")
       .select("class_id")
       .eq("student_id", student.id);
-    const ids = (enrolls || []).map((e) => e.class_id);
-    if (ids.length > 0) {
-      const { data } = await supabase.from("classes").select("*").in("id", ids).order("start_time");
-      setClasses(data || []);
-    }
+    const ids = (enrolls || []).map((e: any) => e.class_id);
+    const byEnroll = ids.length > 0
+      ? supabase.from("classes").select("*").in("id", ids).order("start_time")
+      : Promise.resolve({ data: [] as any[] });
+
+    const [a, b] = await Promise.all([byClassSection, byEnroll]);
+    const merged = new Map<string, Cls>();
+    [...(a.data || []), ...(b.data || [])].forEach((c: any) => merged.set(c.id, c));
+    setClasses(Array.from(merged.values()).sort((x, y) => (x.start_time || "").localeCompare(y.start_time || "")));
     setLoading(false);
   };
 
