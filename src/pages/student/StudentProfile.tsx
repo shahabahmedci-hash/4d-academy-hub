@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ArrowLeft, User, LogOut, Save, AlertCircle } from "lucide-react";
+import { ArrowLeft, User, LogOut, Save, AlertCircle, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import AvatarUpload from "@/components/shared/AvatarUpload";
 
@@ -111,6 +111,7 @@ const StudentProfile = () => {
         user_id: profile.id,
         father_name: student.father_name,
         date_of_birth: student.date_of_birth || null,
+        address: profile.address,
         emergency_contact_name: student.emergency_contact_name,
         emergency_contact_phone: student.emergency_contact_phone,
       };
@@ -122,7 +123,12 @@ const StudentProfile = () => {
         if (error) throw error;
       }
 
-      toast({ title: "Saved", description: completed ? "Profile complete!" : "Profile updated. Some required fields are still empty." });
+      toast({
+        title: "Saved",
+        description: completed
+          ? "Profile complete! Your details are now locked."
+          : "Profile updated. Some required fields are still empty.",
+      });
       await load();
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message });
@@ -134,6 +140,7 @@ const StudentProfile = () => {
   if (loading) return <PageSkeleton />;
 
   const complete = isComplete();
+  const locked = !!profile?.profile_completed;
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -151,7 +158,15 @@ const StudentProfile = () => {
       </header>
 
       <main className="container max-w-3xl mx-auto px-4 py-6 space-y-4">
-        {!complete && (
+        {locked && (
+          <Alert>
+            <Lock className="h-4 w-4" />
+            <AlertDescription>
+              Your profile is locked. Contact an admin to make changes.
+            </AlertDescription>
+          </Alert>
+        )}
+        {!complete && !locked && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
@@ -182,24 +197,24 @@ const StudentProfile = () => {
           <CardContent className="space-y-4">
             <div>
               <Label>Full Name<Req /></Label>
-              <Input value={profile!.full_name || ""} onChange={(e) => setProfile({ ...profile!, full_name: e.target.value })} />
+              <Input disabled={locked} value={profile!.full_name || ""} onChange={(e) => setProfile({ ...profile!, full_name: e.target.value })} />
             </div>
             <div>
               <Label>Phone<Req /></Label>
-              <Input value={profile!.phone || ""} maxLength={10} onChange={(e) => setProfile({ ...profile!, phone: e.target.value.replace(/\D/g, "") })} placeholder="10-digit" />
+              <Input disabled={locked} value={profile!.phone || ""} maxLength={10} onChange={(e) => setProfile({ ...profile!, phone: e.target.value.replace(/\D/g, "") })} placeholder="10-digit" />
             </div>
             <div>
               <Label>Address<Req /></Label>
-              <Input value={profile!.address || ""} onChange={(e) => setProfile({ ...profile!, address: e.target.value })} />
+              <Input disabled={locked} value={profile!.address || ""} onChange={(e) => setProfile({ ...profile!, address: e.target.value })} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Father's Name<Req /></Label>
-                <Input value={student!.father_name || ""} onChange={(e) => setStudent({ ...student!, father_name: e.target.value })} />
+                <Input disabled={locked} value={student!.father_name || ""} onChange={(e) => setStudent({ ...student!, father_name: e.target.value })} />
               </div>
               <div>
                 <Label>Date of Birth<Req /></Label>
-                <Input type="date" value={student!.date_of_birth || ""} onChange={(e) => setStudent({ ...student!, date_of_birth: e.target.value })} />
+                <Input disabled={locked} type="date" value={student!.date_of_birth || ""} onChange={(e) => setStudent({ ...student!, date_of_birth: e.target.value })} />
               </div>
             </div>
           </CardContent>
@@ -220,18 +235,20 @@ const StudentProfile = () => {
           <CardContent className="grid grid-cols-2 gap-4">
             <div>
               <Label>Name<Req /></Label>
-              <Input value={student!.emergency_contact_name || ""} onChange={(e) => setStudent({ ...student!, emergency_contact_name: e.target.value })} />
+              <Input disabled={locked} value={student!.emergency_contact_name || ""} onChange={(e) => setStudent({ ...student!, emergency_contact_name: e.target.value })} />
             </div>
             <div>
               <Label>Phone<Req /></Label>
-              <Input value={student!.emergency_contact_phone || ""} maxLength={10} onChange={(e) => setStudent({ ...student!, emergency_contact_phone: e.target.value.replace(/\D/g, "") })} placeholder="10-digit" />
+              <Input disabled={locked} value={student!.emergency_contact_phone || ""} maxLength={10} onChange={(e) => setStudent({ ...student!, emergency_contact_phone: e.target.value.replace(/\D/g, "") })} placeholder="10-digit" />
             </div>
           </CardContent>
         </Card>
 
-        <Button className="w-full" size="lg" onClick={save} disabled={saving}>
-          <Save className="h-4 w-4 mr-2" /> {saving ? "Saving..." : "Save Profile"}
-        </Button>
+        {!locked && (
+          <Button className="w-full" size="lg" onClick={save} disabled={saving}>
+            <Save className="h-4 w-4 mr-2" /> {saving ? "Saving..." : "Save Profile"}
+          </Button>
+        )}
       </main>
       <BottomNav role="student" />
     </div>
