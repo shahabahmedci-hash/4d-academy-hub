@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import BottomNav from "@/components/shared/BottomNav";
@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { ArrowLeft, FileText, Upload, Download, Trash2, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -21,21 +23,51 @@ interface Doc {
   file_url: string;
   file_size: number | null;
   uploaded_by: string;
+  class: string | null;
+  section: string | null;
+  stream: string | null;
   created_at: string;
 }
+
+const ACCEPTED_TYPES = ".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf";
+const ANY = "__any__";
 
 const Documents = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [form, setForm] = useState({ title: "", description: "", file: null as File | null });
+  const [form, setForm] = useState({
+    title: "", description: "",
+    class: ANY, section: ANY, stream: ANY,
+    file: null as File | null,
+  });
+  const [options, setOptions] = useState<{ classes: string[]; sections: string[]; streams: string[] }>({
+    classes: [], sections: [], streams: [],
+  });
 
   useEffect(() => {
     load();
+    loadOptions();
   }, []);
+
+  const loadOptions = async () => {
+    const { data } = await supabase.from("students").select("class, section, stream");
+    const cs = new Set<string>(), ss = new Set<string>(), st = new Set<string>();
+    (data || []).forEach((r: any) => {
+      if (r.class) cs.add(r.class);
+      if (r.section) ss.add(r.section);
+      if (r.stream) st.add(r.stream);
+    });
+    setOptions({
+      classes: Array.from(cs).sort(),
+      sections: Array.from(ss).sort(),
+      streams: Array.from(st).sort(),
+    });
+  };
 
   const load = async () => {
     setLoading(true);
@@ -63,10 +95,6 @@ const Documents = () => {
       const { error: upErr } = await supabase.storage.from("documents").upload(path, form.file);
       if (upErr) throw upErr;
 
-      const { data: urlData } = supabase.storage.from("documents").createSignedUrl
-        ? await supabase.storage.from("documents").createSignedUrl(path, 60 * 60 * 24 * 365)
-        : { data: { signedUrl: "" } };
-
       const { error: insErr } = await supabase.from("documents").insert({
         title: form.title,
         description: form.description || null,
@@ -76,12 +104,16 @@ const Documents = () => {
         file_size: form.file.size,
         uploaded_by: user.id,
         uploader_role: "admin",
+        class: form.class === ANY ? null : form.class,
+        section: form.section === ANY ? null : form.section,
+        stream: form.stream === ANY ? null : form.stream,
       });
       if (insErr) throw insErr;
 
       toast({ title: "Uploaded", description: "Document uploaded successfully" });
       setOpen(false);
-      setForm({ title: "", description: "", file: null });
+      setForm({ title: "", description: "", class: ANY, section: ANY, stream: ANY, file: null });
+      if (fileInputRef.current) fileInputRef.current.value = "";
       load();
     } catch (e: any) {
       toast({ title: "Upload failed", description: e.message, variant: "destructive" });
@@ -91,7 +123,7 @@ const Documents = () => {
   };
 
   const handleDownload = async (doc: Doc) => {
-    const { data, error } = await supabase.storage.from("documents").createSignedUrl(doc.file_url, 60 * 5);
+    const { data, error } = await supabase.storage.from("documents").createSignedUrl(doc.file_url, 60 * 60);
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
       return;
@@ -103,10 +135,7 @@ const Documents = () => {
     await supabase.storage.from("documents").remove([doc.file_url]);
     const { error } = await supabase.from("documents").delete().eq("id", doc.id);
     if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
-    else {
-      toast({ title: "Deleted" });
-      load();
-    }
+    else { toast({ title: "Deleted" }); load(); }
   };
 
   if (loading) return <PageSkeleton />;
@@ -128,7 +157,7 @@ const Documents = () => {
             <DialogTrigger asChild>
               <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Upload</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader><DialogTitle>Upload Document</DialogTitle></DialogHeader>
               <div className="space-y-4">
                 <div>
@@ -139,9 +168,47 @@ const Documents = () => {
                   <Label>Description</Label>
                   <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
                 </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <Label>Class</Label>
+                    <Select value={form.class} onValueChange={(v) => setForm({ ...form, class: v })}>
+                      <SelectTrigger><SelectValue placeholder="Any" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={ANY}>Any</SelectItem>
+                        {options.classes.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Section</Label>
+                    <Select value={form.section} onValueChange={(v) => setForm({ ...form, section: v })}>
+                      <SelectTrigger><SelectValue placeholder="Any" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={ANY}>Any</SelectItem>
+                        {options.sections.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Stream</Label>
+                    <Select value={form.stream} onValueChange={(v) => setForm({ ...form, stream: v })}>
+                      <SelectTrigger><SelectValue placeholder="Any" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={ANY}>Any</SelectItem>
+                        {options.streams.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
                 <div>
                   <Label>File *</Label>
-                  <Input type="file" onChange={(e) => setForm({ ...form, file: e.target.files?.[0] || null })} />
+                  <Input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={ACCEPTED_TYPES}
+                    onChange={(e) => setForm({ ...form, file: e.target.files?.[0] || null })}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Allowed: PDF, DOC(X), XLS(X), PPT(X)</p>
                 </div>
               </div>
               <DialogFooter>
@@ -173,6 +240,12 @@ const Documents = () => {
                     </span>
                   </CardTitle>
                   {d.description && <p className="text-sm text-muted-foreground">{d.description}</p>}
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {d.class && <Badge variant="outline" className="text-xs">Class {d.class}</Badge>}
+                    {d.section && <Badge variant="outline" className="text-xs">Sec {d.section}</Badge>}
+                    {d.stream && <Badge variant="outline" className="text-xs">{d.stream}</Badge>}
+                    {!d.class && !d.section && !d.stream && <Badge variant="secondary" className="text-xs">All</Badge>}
+                  </div>
                 </CardHeader>
                 <CardContent className="flex items-center justify-between">
                   <p className="text-xs text-muted-foreground">{d.file_name}</p>
