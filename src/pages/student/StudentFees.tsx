@@ -6,8 +6,9 @@ import PageSkeleton from "@/components/shared/PageSkeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, DollarSign } from "lucide-react";
+import { ArrowLeft, IndianRupee, Download } from "lucide-react";
 import { useProfileCompletionGate } from "@/hooks/useProfileCompletionGate";
+import { generateReceipt } from "@/lib/generateReceipt";
 
 interface Fee {
   id: string;
@@ -23,6 +24,7 @@ const StudentFees = () => {
   const navigate = useNavigate();
   const { loading: gateLoading, profileCompleted } = useProfileCompletionGate();
   const [fees, setFees] = useState<Fee[]>([]);
+  const [studentName, setStudentName] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -33,7 +35,11 @@ const StudentFees = () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { navigate("/"); return; }
 
-    const { data: student } = await supabase.from("students").select("id").eq("user_id", user.id).maybeSingle();
+    const [{ data: profile }, { data: student }] = await Promise.all([
+      supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
+      supabase.from("students").select("id").eq("user_id", user.id).maybeSingle(),
+    ]);
+    setStudentName(profile?.full_name || "Student");
     if (!student) { setLoading(false); return; }
 
     const { data } = await supabase
@@ -43,6 +49,19 @@ const StudentFees = () => {
       .order("due_date", { ascending: false });
     setFees(data || []);
     setLoading(false);
+  };
+
+  const handleDownload = async (f: Fee) => {
+    await generateReceipt({
+      feeId: f.id,
+      studentName,
+      amount: Number(f.amount),
+      dueDate: f.due_date,
+      paidDate: f.paid_date || new Date().toISOString(),
+      paymentMethod: f.payment_method,
+      notes: f.notes,
+    });
+    navigate("/preview-download");
   };
 
   if (gateLoading || loading) return <PageSkeleton />;
@@ -60,7 +79,7 @@ const StudentFees = () => {
           <Button variant="ghost" size="icon" onClick={() => navigate("/student/dashboard")}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <DollarSign className="h-5 w-5 text-primary" />
+          <IndianRupee className="h-5 w-5 text-primary" />
           <h1 className="text-xl font-bold">My Fees</h1>
         </div>
       </header>
@@ -82,7 +101,14 @@ const StudentFees = () => {
                     <CardTitle className="text-lg">₹{Number(f.amount).toLocaleString()}</CardTitle>
                     <p className="text-sm text-muted-foreground">Due: {new Date(f.due_date).toLocaleDateString()}</p>
                   </div>
-                  <Badge variant={statusVariant(f.status)}>{f.status}</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={statusVariant(f.status)}>{f.status}</Badge>
+                    {f.status === "paid" && (
+                      <Button size="icon" variant="ghost" onClick={() => handleDownload(f)} title="Download receipt">
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                 </CardHeader>
                 {(f.paid_date || f.notes) && (
                   <CardContent className="text-sm text-muted-foreground space-y-1">

@@ -217,9 +217,20 @@ const TeacherDetails = () => {
             <CardDescription>Manage this teacher</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            <Button variant="outline" className="w-full" onClick={() => navigate(`/admin/salaries?teacher_id=${teacher.id}`)}>
-              View Salary History
-            </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="outline" onClick={() => navigate(`/admin/salaries?teacher_id=${teacher.id}`)}>
+                Salary History
+              </Button>
+              <Button variant="outline" onClick={() => navigate(`/admin/teacher-attendance?teacher_id=${teacher.id}`)}>
+                Attendance
+              </Button>
+              <Button variant="outline" onClick={() => navigate(`/admin/classes?teacher_id=${teacher.id}`)}>
+                Manage Classes
+              </Button>
+              <Button variant="default" onClick={() => navigate(`/admin/teachers?edit=${teacher.id}`)}>
+                Edit Teacher
+              </Button>
+            </div>
           </CardContent>
         </Card>
 

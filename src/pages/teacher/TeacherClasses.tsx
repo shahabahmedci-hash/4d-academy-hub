@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ArrowLeft, Clock, MapPin } from "lucide-react";
 import { useTeacherProfileGate } from "@/hooks/useTeacherProfileGate";
+import ClassDetailsDialog from "@/components/teacher/ClassDetailsDialog";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -17,6 +18,8 @@ const TeacherClasses = () => {
   const { loading: gateLoading, profileCompleted } = useTeacherProfileGate();
   const [loading, setLoading] = useState(true);
   const [classes, setClasses] = useState<any[]>([]);
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   useEffect(() => { if (profileCompleted) load(); }, [profileCompleted]);
 
@@ -58,7 +61,11 @@ const TeacherClasses = () => {
                 <Card><CardContent className="p-8 text-center text-muted-foreground">No classes on {d}</CardContent></Card>
               ) : (
                 classes.filter((c) => c.day_of_week === i).map((c) => (
-                  <Card key={c.id}>
+                  <Card
+                    key={c.id}
+                    className="cursor-pointer hover:bg-accent/40 transition-colors"
+                    onClick={() => { setSelectedClassId(c.id); setDetailsOpen(true); }}
+                  >
                     <CardContent className="p-4 space-y-2">
                       <div className="flex justify-between items-start">
                         <div>
@@ -76,6 +83,7 @@ const TeacherClasses = () => {
           ))}
         </Tabs>
       </div>
+      <ClassDetailsDialog classId={selectedClassId} open={detailsOpen} onOpenChange={setDetailsOpen} />
       <BottomNav role="teacher" />
     </div>
   );
