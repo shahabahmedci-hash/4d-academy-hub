@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import BottomNav from "@/components/shared/BottomNav";
 import PageSkeleton from "@/components/shared/PageSkeleton";
+import ProfileAvatar from "@/components/shared/ProfileAvatar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,7 +30,7 @@ const TeacherStudents = () => {
         const { data: enr } = await supabase.from("class_enrollments").select("student_id").in("class_id", cids);
         const sids = [...new Set((enr || []).map((e) => e.student_id))];
         if (sids.length > 0) {
-          const { data: studs } = await supabase.from("students").select("id, student_id, class, section, user_id, profiles:user_id(full_name, email)").in("id", sids);
+          const { data: studs } = await supabase.from("students").select("id, student_id, class, section, user_id, profiles:user_id(full_name, email, avatar_url)").in("id", sids);
           setStudents((studs as any) || []);
         }
       }
@@ -63,10 +64,17 @@ const TeacherStudents = () => {
         ) : (
           filtered.map((s) => (
             <Card key={s.id}>
-              <CardContent className="p-4">
-                <p className="font-semibold">{(s.profiles as any)?.full_name || "Unknown"}</p>
-                <p className="text-xs text-muted-foreground">{s.student_id}{s.class ? ` • Class ${s.class}` : ""}{s.section ? ` - ${s.section}` : ""}</p>
-                {(s.profiles as any)?.email && <p className="text-xs text-muted-foreground mt-1">{(s.profiles as any).email}</p>}
+              <CardContent className="p-4 flex items-center gap-3">
+                <ProfileAvatar
+                  avatarUrl={(s.profiles as any)?.avatar_url}
+                  fullName={(s.profiles as any)?.full_name}
+                  className="h-12 w-12"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold truncate">{(s.profiles as any)?.full_name || "Unknown"}</p>
+                  <p className="text-xs text-muted-foreground">{s.student_id}{s.class ? ` • Class ${s.class}` : ""}{s.section ? ` - ${s.section}` : ""}</p>
+                  {(s.profiles as any)?.email && <p className="text-xs text-muted-foreground mt-1 truncate">{(s.profiles as any).email}</p>}
+                </div>
               </CardContent>
             </Card>
           ))
