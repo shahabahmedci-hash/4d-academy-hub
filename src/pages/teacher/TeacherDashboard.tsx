@@ -27,20 +27,16 @@ const TeacherDashboard = () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { navigate("/"); return; }
 
-    const { data: profile } = await supabase.from("profiles").select("full_name, avatar_url").eq("id", user.id).single();
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("full_name, avatar_url, profile_completed")
+      .eq("id", user.id)
+      .single();
     setUserName(profile?.full_name || "");
     setAvatarPath(profile?.avatar_url || null);
+    setProfileIncomplete(!profile?.profile_completed);
 
-    const { data: teacher } = await supabase
-      .from("teachers")
-      .select("id, phone, address, emergency_contact")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    if (teacher) {
-      setProfileIncomplete(!teacher.phone || !teacher.address || !teacher.emergency_contact);
-    } else {
-      setProfileIncomplete(true);
-    }
+    const { data: teacher } = await supabase.from("teachers").select("id").eq("user_id", user.id).maybeSingle();
     if (teacher) {
       const { data: tc } = await supabase.from("teacher_classes").select("class_id").eq("teacher_id", teacher.id);
       const classIds = (tc || []).map((c) => c.class_id);
