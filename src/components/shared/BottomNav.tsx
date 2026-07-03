@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import { Home, Users, DollarSign, TrendingUp, Menu, Calendar, BookOpen, User, Award, FileText, ClipboardCheck, Zap } from "lucide-react";
+import { Home, Users, IndianRupee, TrendingUp, Menu, Calendar, BookOpen, User, Award, FileText, ClipboardCheck, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -18,7 +18,7 @@ interface BottomNavProps {
 const adminPrimaryNav: NavItem[] = [
   { label: "Dashboard", icon: Home, path: "/admin/dashboard" },
   { label: "Students", icon: Users, path: "/admin/students" },
-  { label: "Fees", icon: DollarSign, path: "/admin/fees" },
+  { label: "Fees", icon: IndianRupee, path: "/admin/fees" },
   { label: "Analytics", icon: TrendingUp, path: "/admin/analytics" },
 ];
 
@@ -27,8 +27,8 @@ const adminMoreNav: NavItem[] = [
   { label: "Attendance", icon: ClipboardCheck, path: "/admin/attendance" },
   { label: "Teacher Attendance", icon: ClipboardCheck, path: "/admin/teacher-attendance" },
   { label: "Teachers", icon: Users, path: "/admin/teachers" },
-  { label: "Expenses", icon: DollarSign, path: "/admin/expenses" },
-  { label: "Salaries", icon: DollarSign, path: "/admin/salaries" },
+  { label: "Expenses", icon: IndianRupee, path: "/admin/expenses" },
+  { label: "Salaries", icon: IndianRupee, path: "/admin/salaries" },
   { label: "Documents", icon: FileText, path: "/admin/documents" },
   { label: "Approvals", icon: Users, path: "/admin/approvals" },
   { label: "Financial Years", icon: Calendar, path: "/admin/financial-years" },
@@ -43,7 +43,7 @@ const studentPrimaryNav: NavItem[] = [
 ];
 
 const studentMoreNav: NavItem[] = [
-  { label: "Fees", icon: DollarSign, path: "/student/fees" },
+  { label: "Fees", icon: IndianRupee, path: "/student/fees" },
   { label: "Study Materials", icon: FileText, path: "/student/documents" },
 ];
 
@@ -54,7 +54,7 @@ const teacherPrimaryNav: NavItem[] = [
 ];
 
 const teacherMoreNav: NavItem[] = [
-  { label: "Salary", icon: DollarSign, path: "/teacher/salary" },
+  { label: "Salary", icon: IndianRupee, path: "/teacher/salary" },
   { label: "My Students", icon: Users, path: "/teacher/students" },
   { label: "Documents", icon: FileText, path: "/teacher/documents" },
   { label: "My Attendance", icon: Award, path: "/teacher/my-attendance" },

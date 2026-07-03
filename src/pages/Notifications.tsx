@@ -27,6 +27,7 @@ const Notifications = () => {
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [role, setRole] = useState<"admin" | "student" | "teacher">("student");
+  const [visibleCount, setVisibleCount] = useState(20);
 
   useEffect(() => {
     init();
@@ -165,29 +166,38 @@ const Notifications = () => {
             </CardContent>
           </Card>
         ) : (
-          notifications.map((n) => (
-            <Card
-              key={n.id}
-              className={`cursor-pointer transition hover:bg-accent ${!n.read ? "border-primary/40" : ""}`}
-              onClick={() => !n.read && markAsRead(n.id)}
-            >
-              <CardContent className="p-4 flex items-start gap-3">
-                <div className={`h-10 w-10 rounded-full border flex items-center justify-center shrink-0 ${typeColor(n.type)}`}>
-                  <Bell className="h-5 w-5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className={`font-medium ${!n.read ? "font-semibold" : ""}`}>{n.title}</h3>
-                    {!n.read && <Badge variant="default" className="text-[10px]">New</Badge>}
+          <>
+            {notifications.slice(0, visibleCount).map((n) => (
+              <Card
+                key={n.id}
+                className={`cursor-pointer transition hover:bg-accent ${!n.read ? "border-primary/40" : ""}`}
+                onClick={() => !n.read && markAsRead(n.id)}
+              >
+                <CardContent className="p-4 flex items-start gap-3">
+                  <div className={`h-10 w-10 rounded-full border flex items-center justify-center shrink-0 ${typeColor(n.type)}`}>
+                    <Bell className="h-5 w-5" />
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">{n.message}</p>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          ))
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className={`font-medium ${!n.read ? "font-semibold" : ""}`}>{n.title}</h3>
+                      {!n.read && <Badge variant="default" className="text-[10px]">New</Badge>}
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">{n.message}</p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+            {visibleCount < notifications.length && (
+              <div className="flex justify-center pt-2">
+                <Button variant="outline" onClick={() => setVisibleCount((c) => c + 20)}>
+                  Load more ({notifications.length - visibleCount} remaining)
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </main>
       <BottomNav role={role} />

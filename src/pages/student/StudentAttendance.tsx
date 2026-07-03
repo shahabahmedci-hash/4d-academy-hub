@@ -91,14 +91,32 @@ const StudentAttendance = () => {
       </header>
 
       <main className="container max-w-5xl mx-auto px-4 py-6 space-y-4">
-        {years.length > 0 && (
-          <Select value={yearId} onValueChange={(v) => { setYearId(v); setActiveStatus(null); }}>
-            <SelectTrigger className="w-full md:w-64"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {years.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {years.length > 0 && (
+            <Select value={yearId} onValueChange={(v) => { setYearId(v); setActiveStatus(null); }}>
+              <SelectTrigger className="w-full md:w-64"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {years.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {["present", "absent", "late", "excused"].map((s) => (
+              <Button
+                key={s}
+                size="sm"
+                variant={activeStatus === s ? "default" : "outline"}
+                onClick={() => setActiveStatus(activeStatus === s ? null : s)}
+                className="capitalize"
+              >
+                {s}
+              </Button>
+            ))}
+            {activeStatus && (
+              <Button size="sm" variant="ghost" onClick={() => setActiveStatus(null)}>Clear</Button>
+            )}
+          </div>
+        </div>
 
         <div className="grid md:grid-cols-2 gap-4">
           <AttendancePieChart
