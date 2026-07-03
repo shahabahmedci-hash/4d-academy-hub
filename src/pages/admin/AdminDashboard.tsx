@@ -109,7 +109,7 @@ const AdminDashboard = () => {
     { label: "Manage Students", icon: Users, path: "/admin/students" },
     { label: "Manage Teachers", icon: GraduationCap, path: "/admin/teachers" },
     ...(isAdminUser ? [{ label: "Manage Co-Admins", icon: ShieldCheck, path: "/admin/co-admins" }] : []),
-    { label: "Fee Management", icon: DollarSign, path: "/admin/fees" },
+    { label: "Fee Management", icon: IndianRupee, path: "/admin/fees" },
     { label: "Salaries", icon: Receipt, path: "/admin/salaries" },
     { label: "Expenses", icon: Receipt, path: "/admin/expenses" },
     { label: "Teacher Attendance", icon: ClipboardCheck, path: "/admin/teacher-attendance" },
@@ -172,7 +172,7 @@ const AdminDashboard = () => {
           </Card>
           <Card>
             <CardHeader className="pb-2 pt-4 px-4">
-              <CardDescription className="flex items-center gap-1"><DollarSign className="h-4 w-4" /> Pending Fees</CardDescription>
+              <CardDescription className="flex items-center gap-1"><IndianRupee className="h-4 w-4" /> Pending Fees</CardDescription>
             </CardHeader>
             <CardContent className="px-4 pb-4">
               <p className="text-2xl font-bold">{stats.pendingFees}</p>
