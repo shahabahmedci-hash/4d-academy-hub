@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, DollarSign, Calendar, TrendingUp, LogOut, Receipt, User, FileText, Archive, GraduationCap, ShieldCheck, Lock, ClipboardCheck, Zap } from "lucide-react";
+import { Users, IndianRupee, Calendar, TrendingUp, LogOut, Receipt, User, FileText, Archive, GraduationCap, ShieldCheck, Lock, ClipboardCheck, Zap } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import logo from "@/assets/logo.png";
