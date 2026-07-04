@@ -10,6 +10,7 @@ import logo from "@/assets/logo.png";
 import NotificationBell from "@/components/shared/NotificationBell";
 import ThemeToggle from "@/components/shared/ThemeToggle";
 import BottomNav from "@/components/shared/BottomNav";
+import AdBanner from "@/components/shared/AdBanner";
 import { Skeleton } from "@/components/ui/skeleton";
 import AIInsightsPanel from "@/components/admin/AIInsightsPanel";
 import DashboardAutomationCard from "@/components/admin/DashboardAutomationCard";
@@ -227,6 +228,7 @@ const AdminDashboard = () => {
       </div>
 
       <BottomNav role="admin" />
+      <AdBanner />
     </div>
   );
 };

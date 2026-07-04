@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import BottomNav from "@/components/shared/BottomNav";
+import AdBanner from "@/components/shared/AdBanner";
 import PageSkeleton from "@/components/shared/PageSkeleton";
 import NotificationBell from "@/components/shared/NotificationBell";
 import ThemeToggle from "@/components/shared/ThemeToggle";
@@ -159,6 +160,7 @@ const StudentDashboard = () => {
         </div>
       </main>
       <BottomNav role="student" />
+      <AdBanner />
     </div>
   );
 };
