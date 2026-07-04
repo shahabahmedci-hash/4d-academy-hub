@@ -124,7 +124,7 @@ Tuition Center Analytics Summary:
         "X-Title": "4D Academy Analytics",
       },
       body: JSON.stringify({
-        model: "meta-llama/llama-3.1-8b-instruct:free",
+        model: "deepseek/deepseek-chat-v3.1:free",
         messages: [
           {
             role: "system",
