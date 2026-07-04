@@ -189,7 +189,7 @@ Tuition Center Analytics Summary:
 
     console.log("Analytics context:", analyticsContext);
 
-    if (!OPENROUTER_API_KEY) {
+    if (!GEMINI_API_KEY) {
       return new Response(JSON.stringify({
         success: true,
         data: buildFallbackInsights(rawMetrics, "AI insights are running in fallback mode because the AI provider is not configured."),
@@ -198,20 +198,7 @@ Tuition Center Analytics Summary:
       });
     }
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://4d-academy.lovable.app",
-        "X-Title": "4D Academy Analytics",
-      },
-      body: JSON.stringify({
-        model: "deepseek/deepseek-chat-v3.1",
-        messages: [
-          {
-            role: "system",
-            content: `You are a business analytics assistant for a tuition center called 4D Academy. Analyze the provided data and generate actionable insights and recommendations. Be concise, specific, and practical.
+    const systemPrompt = `You are a business analytics assistant for a tuition center called 4D Academy. Analyze the provided data and generate actionable insights and recommendations. Be concise, specific, and practical.
 
 IMPORTANT HEALTH SCORING GUIDELINES:
 - If the business is profitable (net profit > 0), the healthScore MUST be at least 60.
@@ -221,61 +208,51 @@ IMPORTANT HEALTH SCORING GUIDELINES:
 - Small but profitable early-stage operations should be assessed positively — growth potential is a strength, not a weakness.
 - Focus on actionable improvements rather than penalizing small scale.
 
-Format your response as JSON with the following structure:
+Respond with ONLY valid JSON (no markdown fences) in this structure:
 {
   "summary": "A brief 1-2 sentence overview of the business health",
-  "insights": [
-    {"title": "Insight title", "description": "Detailed insight", "type": "positive|warning|info"}
-  ],
-  "recommendations": [
-    {"title": "Recommendation title", "description": "Actionable recommendation", "priority": "high|medium|low"}
-  ],
-  "keyMetrics": {
-    "healthScore": number between 0-100,
-    "trend": "up|down|stable"
-  }
+  "insights": [{"title": "...", "description": "...", "type": "positive|warning|info"}],
+  "recommendations": [{"title": "...", "description": "...", "priority": "high|medium|low"}],
+  "keyMetrics": {"healthScore": 0-100, "trend": "up|down|stable"}
 }
-Provide 3-5 insights and 3-4 recommendations based on the data.`
+Provide 3-5 insights and 3-4 recommendations.`;
+
+    const geminiModel = "gemini-2.0-flash";
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ role: "user", parts: [{ text: analyticsContext }] }],
+          generationConfig: {
+            temperature: 0.7,
+            responseMimeType: "application/json",
           },
-          {
-            role: "user",
-            content: analyticsContext
-          }
-        ],
-        temperature: 0.7,
-      }),
-    });
+        }),
+      }
+    );
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Gemini error:", response.status, errorText);
       if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "OpenRouter rate limit reached, please try again in a minute." }), {
+        return new Response(JSON.stringify({ error: "Gemini rate limit reached, please try again in a minute." }), {
           status: 429,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "OpenRouter credits exhausted or model requires payment. Add credits at openrouter.ai/credits." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const errorText = await response.text();
-      console.error("OpenRouter error:", response.status, errorText);
-
-      if (response.status === 404) {
-        return new Response(JSON.stringify({
-          success: true,
-          data: buildFallbackInsights(rawMetrics, "AI model is temporarily unavailable, so fallback analytics are shown."),
-        }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      throw new Error(`OpenRouter error: ${response.status}`);
+      return new Response(JSON.stringify({
+        success: true,
+        data: buildFallbackInsights(rawMetrics, "AI model is temporarily unavailable, so fallback analytics are shown."),
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const aiResponse = await response.json();
-    const content = aiResponse.choices?.[0]?.message?.content;
+    const content = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
     
     console.log("AI response content:", content);
 
