@@ -6,6 +6,71 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+type AnalyticsMetrics = {
+  totalStudents: number;
+  totalClasses: number;
+  totalRevenue: number;
+  pendingAmount: number;
+  overdueAmount: number;
+  totalExpenses: number;
+  netProfit: number;
+  attendanceRate: string | number;
+  expensesByCategory: Record<string, number>;
+};
+
+const buildFallbackInsights = (metrics: AnalyticsMetrics, notice?: string) => {
+  const hasFinancialData = metrics.totalRevenue > 0 || metrics.totalExpenses > 0 || metrics.pendingAmount > 0 || metrics.overdueAmount > 0;
+  const profitable = metrics.netProfit >= 0;
+  const healthScore = !hasFinancialData ? 60 : profitable ? Math.min(85, 65 + Math.round(metrics.totalRevenue / Math.max(metrics.totalRevenue + metrics.pendingAmount + metrics.overdueAmount, 1) * 20)) : 45;
+
+  return {
+    summary: notice || (hasFinancialData
+      ? `Your current net position is ₹${metrics.netProfit.toLocaleString()} with ₹${metrics.pendingAmount.toLocaleString()} pending and ₹${metrics.overdueAmount.toLocaleString()} overdue.`
+      : "Analytics are ready, but there is not enough financial activity yet for a deep trend analysis."),
+    insights: [
+      {
+        title: profitable ? "Financial position is stable" : "Expenses need attention",
+        description: profitable
+          ? `Revenue is currently covering expenses, leaving a net position of ₹${metrics.netProfit.toLocaleString()}.`
+          : `Expenses are ahead of collected revenue by ₹${Math.abs(metrics.netProfit).toLocaleString()}.`,
+        type: profitable ? "positive" : "warning",
+      },
+      {
+        title: "Fee follow-up opportunity",
+        description: `Pending and overdue fees total ₹${(metrics.pendingAmount + metrics.overdueAmount).toLocaleString()}.`,
+        type: metrics.pendingAmount + metrics.overdueAmount > 0 ? "warning" : "positive",
+      },
+      {
+        title: "Attendance baseline",
+        description: `Average attendance is ${metrics.attendanceRate}%, which can be used to track class engagement over time.`,
+        type: "info",
+      },
+    ],
+    recommendations: [
+      {
+        title: "Prioritize overdue collections",
+        description: "Follow up with students who have overdue fees before adding new expense commitments.",
+        priority: metrics.overdueAmount > 0 ? "high" : "medium",
+      },
+      {
+        title: "Review expense categories",
+        description: "Compare recurring expense categories against monthly revenue to protect margins.",
+        priority: "medium",
+      },
+      {
+        title: "Track attendance weekly",
+        description: "Use attendance trends to identify classes or students that need support early.",
+        priority: "low",
+      },
+    ],
+    keyMetrics: {
+      healthScore,
+      trend: profitable ? "stable" : "down",
+    },
+    rawMetrics: metrics,
+  };
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -13,9 +78,6 @@ serve(async (req) => {
 
   try {
     const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
-    if (!OPENROUTER_API_KEY) {
-      throw new Error("OPENROUTER_API_KEY is not configured");
-    }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -113,7 +175,28 @@ Tuition Center Analytics Summary:
 - Collection Rate: ${feesResult.data?.length ? ((paidFees.length / feesResult.data.length) * 100).toFixed(1) : 0}%
 `;
 
+    const rawMetrics: AnalyticsMetrics = {
+      totalStudents,
+      totalClasses,
+      totalRevenue,
+      pendingAmount,
+      overdueAmount,
+      totalExpenses,
+      netProfit,
+      attendanceRate,
+      expensesByCategory,
+    };
+
     console.log("Analytics context:", analyticsContext);
+
+    if (!OPENROUTER_API_KEY) {
+      return new Response(JSON.stringify({
+        success: true,
+        data: buildFallbackInsights(rawMetrics, "AI insights are running in fallback mode because the AI provider is not configured."),
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -124,7 +207,7 @@ Tuition Center Analytics Summary:
         "X-Title": "4D Academy Analytics",
       },
       body: JSON.stringify({
-        model: "deepseek/deepseek-chat-v3.1:free",
+        model: "deepseek/deepseek-chat-v3.1",
         messages: [
           {
             role: "system",
@@ -178,6 +261,16 @@ Provide 3-5 insights and 3-4 recommendations based on the data.`
       }
       const errorText = await response.text();
       console.error("OpenRouter error:", response.status, errorText);
+
+      if (response.status === 404) {
+        return new Response(JSON.stringify({
+          success: true,
+          data: buildFallbackInsights(rawMetrics, "AI model is temporarily unavailable, so fallback analytics are shown."),
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       throw new Error(`OpenRouter error: ${response.status}`);
     }
 
@@ -207,17 +300,7 @@ Provide 3-5 insights and 3-4 recommendations based on the data.`
       success: true,
       data: {
         ...parsedInsights,
-        rawMetrics: {
-          totalStudents,
-          totalClasses,
-          totalRevenue,
-          pendingAmount,
-          overdueAmount,
-          totalExpenses,
-          netProfit,
-          attendanceRate,
-          expensesByCategory
-        }
+        rawMetrics
       }
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
