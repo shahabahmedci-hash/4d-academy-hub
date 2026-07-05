@@ -238,8 +238,10 @@ Provide 3-5 insights and 3-4 recommendations.`;
       const errorText = await response.text();
       console.error("Gemini error:", response.status, errorText);
       if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Gemini rate limit reached, please try again in a minute." }), {
-          status: 429,
+        return new Response(JSON.stringify({
+          success: true,
+          data: buildFallbackInsights(rawMetrics, "AI model quota reached; showing fallback analytics. Try again in a minute for AI-generated insights."),
+        }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
