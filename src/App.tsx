@@ -6,6 +6,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import Auth from "./pages/Auth";
+import Index from "./pages/Index";
+import AdBanner from "@/components/shared/AdBanner";
 import ResetPassword from "./pages/ResetPassword";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import Students from "./pages/admin/Students";
