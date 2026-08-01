@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    <style>
+      html, body { margin: 0; padding: 0; overflow: hidden; background: transparent; }
+    </style>
+  </head>
+  <body>
+    <script type="text/javascript">
+      (function () {
+        var q = new URLSearchParams(window.location.search);
+        var key = q.get("key");
+        var width = parseInt(q.get("w") || "320", 10);
+        var height = parseInt(q.get("h") || "50", 10);
+        if (!key) return;
+
+        window.atOptions = {
+          key: key,
+          format: "iframe",
+          height: height,
+          width: width,
+          params: {},
+        };
+
+        var s = document.createElement("script");
+        s.type = "text/javascript";
+        s.src = "https://www.highperformanceformat.com/" + key + "/invoke.js";
+        document.body.appendChild(s);
+
+        // Tell the parent whether a creative actually rendered.
+        function report() {
+          var filled = !!(
+            document.body.querySelector("iframe") ||
+            document.body.querySelector("img") ||
+            document.body.querySelector("ins")
+          );
+          try {
+            window.parent.postMessage({ type: "ad-frame-status", filled: filled }, "*");
+          } catch (e) {}
+        }
+        setTimeout(report, 2500);
+        setTimeout(report, 5000);
+      })();
+    </script>
+  </body>
+</html>
