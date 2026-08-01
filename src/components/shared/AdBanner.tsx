@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLocation } from "react-router-dom";
 import { AD_CONFIG, isAdConfigured } from "@/lib/adConfig";
@@ -11,42 +11,29 @@ interface AdBannerProps {
 
 const BOTTOM_NAV_ROUTES = ["/admin/", "/student/", "/teacher/"];
 
-const normalizeSrc = (src: string) => (src.startsWith("//") ? `https:${src}` : src);
-
-const buildSrcDoc = (atOptions: Record<string, unknown>, scriptSrc: string) => `<!DOCTYPE html>
-<html>
-  <head><meta charset="utf-8" /></head>
-  <body style="margin:0;padding:0;overflow:hidden;background:transparent">
-    <script type="text/javascript">var atOptions = ${JSON.stringify(atOptions)};</script>
-    <script type="text/javascript" src="${normalizeSrc(scriptSrc)}"></script>
-  </body>
-</html>`;
-
 const AdBanner = ({ className = "", inline = false }: AdBannerProps) => {
   const isMobile = useIsMobile();
   const [dismissed, setDismissed] = useState(false);
   const [cycleKey, setCycleKey] = useState(0);
-  const [adLoaded, setAdLoaded] = useState(false);
+  const [filled, setFilled] = useState(false);
   const location = useLocation();
-  const fallbackTimer = useRef<ReturnType<typeof setTimeout>>();
 
   const hasBottomNav = isMobile && BOTTOM_NAV_ROUTES.some((r) => location.pathname.startsWith(r));
 
   const config = isMobile ? AD_CONFIG.banner.mobile : AD_CONFIG.banner.desktop;
   const width = config.atOptions.width;
   const height = config.atOptions.height;
+  const frameSrc = `/ad-frame.html?key=${encodeURIComponent(config.atOptions.key)}&w=${width}&h=${height}`;
 
-  const srcDoc = useMemo(
-    () => buildSrcDoc(config.atOptions as unknown as Record<string, unknown>, config.scriptSrc),
-    [config]
-  );
-
-  // Reset load state on each cycle / breakpoint change, with a timeout fallback
-  // so the fixed banner is never hidden forever if onLoad never fires.
+  // Listen for fill status from the ad frame
   useEffect(() => {
-    setAdLoaded(false);
-    fallbackTimer.current = setTimeout(() => setAdLoaded(true), 4000);
-    return () => clearTimeout(fallbackTimer.current);
+    setFilled(false);
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return;
+      if (e.data && e.data.type === "ad-frame-status" && e.data.filled) setFilled(true);
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
   }, [isMobile, dismissed, cycleKey]);
 
   // Auto-close timer (disabled when autoCloseSeconds is 0)
@@ -68,6 +55,8 @@ const AdBanner = ({ className = "", inline = false }: AdBannerProps) => {
 
   if (!AD_CONFIG.enabled || dismissed) return null;
 
+  const configured = isAdConfigured();
+
   const placeholder = (
     <div
       className="flex items-center justify-center rounded border border-dashed border-border bg-muted/30 text-xs text-muted-foreground"
@@ -81,26 +70,38 @@ const AdBanner = ({ className = "", inline = false }: AdBannerProps) => {
     <iframe
       key={`${isMobile ? "m" : "d"}-${cycleKey}`}
       title="Advertisement"
-      srcDoc={srcDoc}
+      src={frameSrc}
       width={width}
       height={height}
       scrolling="no"
       frameBorder={0}
-      onLoad={() => {
-        clearTimeout(fallbackTimer.current);
-        setAdLoaded(true);
+      style={{
+        width,
+        height,
+        border: 0,
+        display: "block",
+        overflow: "hidden",
+        background: "transparent",
+        colorScheme: "normal",
       }}
-      style={{ width, height, border: 0, display: "block", overflow: "hidden" }}
     />
   );
 
   if (inline) {
+    // Collapse entirely when the network returns no creative — no empty white strip.
+    if (configured && !filled) {
+      return (
+        <div className="w-full overflow-hidden" style={{ height: 0 }}>
+          {frame}
+        </div>
+      );
+    }
     return (
       <div
         className={`flex items-center justify-center w-full overflow-hidden ${className}`}
         style={{ minHeight: height }}
       >
-        {isAdConfigured() ? frame : placeholder}
+        {configured ? frame : placeholder}
       </div>
     );
   }
@@ -108,11 +109,14 @@ const AdBanner = ({ className = "", inline = false }: AdBannerProps) => {
   return (
     <div
       className={`fixed left-0 right-0 z-40 flex items-center justify-center ${className}`}
-      style={{ bottom: hasBottomNav ? 64 : 0, display: adLoaded || !isAdConfigured() ? undefined : "none" }}
+      style={{
+        bottom: hasBottomNav ? 64 : 0,
+        display: !configured || filled ? undefined : "none",
+      }}
     >
       <div className="relative">
         <div className="flex items-center justify-center overflow-hidden" style={{ minHeight: height }}>
-          {isAdConfigured() ? frame : placeholder}
+          {configured ? frame : placeholder}
         </div>
         <button
           onClick={() => setDismissed(true)}
