@@ -1,94 +1,34 @@
+## Diagnosis
 
-# Comparison Report — Current App vs `shahabahmedci-hash/d-academy-connect`
+No new Adsterra link/key is needed. Your key and config in `src/lib/adConfig.ts` are real, `enabled: true`, and `AdBanner` is mounted globally in `App.tsx` plus on all three dashboards and the landing page. The network snapshot shows **zero requests to `highperformanceformat.com`**, so the ad script is never producing a creative.
 
-## Summary
-Feature parity is high. All 3 role portals, 30+ routes, edge functions, cron automations, receipts (branded "4D Academy"), imports/exports, financial-year freeze, AI insights, notifications, and automations are present in both. Real gaps are in **visual design** and a **public landing page**. A few small route/component gaps are cosmetic.
+Two causes, in order of likelihood:
 
----
+1. **Injection method is incompatible with Adsterra.** `AdBanner` creates a `<script src=...invoke.js async>` and appends it into a div after React renders. Adsterra's `invoke.js` writes its banner with `document.write()`, which is a no-op once the document has finished parsing — so nothing ever renders and the `MutationObserver` never fires, leaving the fixed banner permanently `display:none`. The supported pattern (and what ad networks expect) is to run `atOptions` + `invoke.js` inside a **fresh document**, i.e. an `<iframe>` with `srcdoc`.
+2. **Preview/adblock environment.** Inside the Lovable preview iframe and with any ad blocker or tracking protection, Adsterra requests are commonly blocked. Ads should be verified on the **published URL** in a normal tab, not in the editor preview.
 
-## A. Visual & Design Differences (biggest gap)
+## What to change
 
-| Area | GitHub reference | This app |
-|---|---|---|
-| Theme mode | Light-first (white bg `0 0% 100%`), dark override | Dark-only (`210 50% 8%` bg), no light theme defined |
-| Primary color | Cyan `195 95% 45%` | Cyan `187 100% 50%` (brighter/greener) |
-| Secondary | Red `0 80% 52%` (used in hero gradient) | Muted grey `210 30% 18%` |
-| Gradients | `--gradient-primary`, `--gradient-hero` (cyan→red) | None |
-| Shadows | `--shadow-brand` cyan glow | None |
-| Transitions | `--transition-smooth` cubic-bezier token | None |
-| Font | System sans stack (no custom) | Inter |
-| Public landing | Full `Index.tsx` with Hero + Navbar + Courses + Features + About + Contact + Footer sections | No landing — `/` goes straight to Auth |
+**`src/components/shared/AdBanner.tsx`** — rewrite the render path:
+- Replace the script-injection approach with an `<iframe>` of exactly the ad size (320x50 mobile / configured size desktop), `scrolling="no"`, no border, `srcdoc` containing:
+  ```html
+  <html><body style="margin:0">
+    <script>atOptions = {...}</script>
+    <script src="https://www.highperformanceformat.com/<key>/invoke.js"></script>
+  </body></html>
+  ```
+- Use an explicit `https:` scheme instead of the protocol-relative `//` URL.
+- Keep existing behaviour: `inline` vs fixed-bottom variant, bottom-nav offset, dismiss button, cooldown re-show, mobile/desktop config switch.
+- Replace the fragile `MutationObserver`-based `adLoaded` gate with the iframe `onLoad` event (plus a timeout fallback), so the fixed banner is no longer hidden forever when detection fails.
+- Keep the "Ad Space" dashed placeholder for when keys aren't configured.
 
-## B. Route / Structural Differences
+**`src/lib/adConfig.ts`** — no key change required; only add the full `https://` script src if we move the URL there.
 
-| Path (GitHub) | Path (this app) |
-|---|---|
-| `/` → landing `Index` | `/` → `Auth` |
-| `/auth` → `Auth` | (missing) |
-| `/admin/edit-profile/:id` | `/admin/profile/:id` |
+## Verification
 
-Everything else — all admin/student/teacher routes — matches.
+- Confirm a request to `highperformanceformat.com/.../invoke.js` appears in the network panel after the change.
+- Check on the published URL with ad blockers off — Adsterra also does not serve on `localhost`/preview domains until the domain is approved in your Adsterra dashboard.
 
-## C. Missing Components
+## Note on your Adsterra account
 
-- `src/components/student/AttendanceRecordsList.tsx` (list view alongside charts)
-- `src/components/teacher/TeacherAttendanceRecordsList.tsx`
-- Landing-page components: `Hero`, `Navbar`, `About`, `Courses`, `Features`, `Contact`, `Footer`
-
-## D. Feature Parity — Verified Present in Both
-
-Auth flow (student-only signup, admin approval gate, archived check, role-based redirect), Notifications, Automations page + `automation-dispatcher` cron, Financial-year freeze (`useFinancialYearFreeze`), AI Insights panel, Dashboard Automation Card, Ad Banner, Bulk Promotion, Camera capture, Co-admin role, Archived profiles, all 7 import dialogs, CSV export helper, `generateReceipt` & `generateSalaryReceipt` (identical "4D Academy" A5 PDF, blue header, green PAID badge, `RCP-`/`SAL-` prefix), all 8 edge functions (`ai-analytics`, `auto-attendance-summary`, `auto-mark-overdue`, `automation-dispatcher`, `import-students`, `import-teachers`, `process-recurring-templates`, `send-fee-reminders`).
-
-## E. Known Both-Sides Gap
-`assignments` + `assignment_submissions` tables exist in both schemas but **neither project has a UI page** for assignments.
-
-## F. Functional Test Note
-The full end-to-end test of every function/trigger for every role (login as admin/student/teacher, add student, import CSVs, mark attendance, generate receipts, run each automation task) is a separate step that runs after this plan is approved. It requires real logins in the preview and will be executed via Playwright + `curl_edge_functions` in build mode.
-
----
-
-# Prioritized Fix Plan
-
-## P1 — High visual impact, matches reference
-1. **Rewrite `src/index.css` design tokens** to the reference light-first palette:
-   - `--background 0 0% 100%`, `--foreground 220 15% 20%`
-   - `--primary 195 95% 45%`, `--primary-glow 195 95% 55%`
-   - `--secondary 0 80% 52%` (red accent)
-   - Add `--gradient-primary`, `--gradient-hero` (cyan→red), `--shadow-brand`, `--transition-smooth`
-   - Add `.dark` override block (`--background 220 20% 10%`, `--card 220 20% 12%`)
-2. **Add public landing page** at `/` with the reference 7 components (`Hero`, `Navbar`, `About`, `Courses`, `Features`, `Contact`, `Footer`), and move Auth to `/auth`. Update all `navigate("/")` calls that mean "logout to auth" to `navigate("/auth")`.
-3. **Restart dev server** and screenshot Auth, Landing, Admin dashboard, Student dashboard, Teacher dashboard on both mobile and desktop viewports; compare side-by-side.
-
-## P2 — Structural/component parity
-4. Add `/auth` route alongside `/` (keep both while updating callers).
-5. Rename admin profile route `/admin/profile/:id` → `/admin/edit-profile/:id` (update `AdminDashboard.tsx` quick action and any other callers).
-6. Add `AttendanceRecordsList.tsx` (student) and `TeacherAttendanceRecordsList.tsx` (teacher) — table list of attendance rows to sit under existing charts.
-
-## P3 — Full functional smoke test (executed in build mode)
-Playwright script logs in as admin → student → teacher and walks every screen. For each role, verify:
-- Login redirect, approval gate, archive gate
-- CRUD dialogs (Add/Edit/Delete for Students, Teachers, Classes, Fees, Salaries, Expenses)
-- CSV **import** for all 7 entities (uses tiny fixture files)
-- CSV **export** for all list views (verifies PreviewDownload flow)
-- Receipt **generation** for Fee + Salary (verify "4D Academy" header, logo, PAID badge, `RCP-`/`SAL-` prefix)
-- Attendance marking (student + teacher)
-- Financial-year freeze blocks edits
-- Notifications bell + `/notifications` list
-- AI Insights panel renders (or fallback if Gemini quota hit)
-- Each Automation task via `automation-dispatcher` — invoke edge fn manually with `curl_edge_functions`
-- Ad banner shows and dismisses correctly
-Report: pass/fail per check + console/network errors + screenshots.
-
-## P4 — Optional stretch
-7. Add Assignments UI (list, create, submit) since schema is ready — only if you want to close the both-sides gap.
-
-## Technical Details
-- Design tokens live in `src/index.css` + `tailwind.config.ts`. All colors are HSL; no hardcoded hex in components will be added.
-- Landing sections use the reference layout but this project's own copy/imagery (no external assets copied from the GitHub repo unless you ask).
-- No database migrations required for P1–P3; P4 (Assignments UI) uses existing tables.
-- The Gemini quota-exhausted state on `ai-analytics` already falls back gracefully — no code change needed to reach parity.
-
-## Out of Scope
-- Copying source files verbatim from the GitHub repo (license unclear; we mirror structure and tokens instead).
-- Migrating the DB schema (both are equivalent at the feature level relevant here).
-- Adding Google/OAuth login (not in reference).
+If requests fire but no creative shows, the remaining item is account-side: the site/domain must be added and **approved** in the Adsterra publisher dashboard, and the ad unit's domain must match where it's served. That would be the only case where you need a fresh ad-unit link — generated for the new domain.
