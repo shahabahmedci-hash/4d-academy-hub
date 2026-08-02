@@ -118,8 +118,27 @@ const Auth = () => {
     });
 
     if (error) {
-      toast({ variant: "destructive", title: "Login Failed", description: error.message });
+      const notConfirmed =
+        (error as { code?: string }).code === "email_not_confirmed" ||
+        /not confirmed/i.test(error.message);
+
+      if (notConfirmed) {
+        await supabase.auth.resend({
+          type: "signup",
+          email: loginEmail,
+          options: { emailRedirectTo: `${window.location.origin}/` },
+        });
+        toast({
+          variant: "destructive",
+          title: "Email not verified",
+          description:
+            "Your email address hasn't been verified yet. We've sent a fresh confirmation link — open it, then log in again.",
+        });
+      } else {
+        toast({ variant: "destructive", title: "Login Failed", description: error.message });
+      }
       setLoading(false);
+
     } else if (data.user) {
       const { data: isArchived } = await supabase.rpc("is_user_archived", { _user_id: data.user.id });
       if (isArchived) {
@@ -169,7 +188,12 @@ const Auth = () => {
     if (error) {
       toast({ variant: "destructive", title: "Signup Failed", description: error.message });
     } else if (data.user) {
-      toast({ title: "Registration Submitted!", description: "Your account is pending admin approval." });
+      toast({
+        title: "Registration Submitted!",
+        description:
+          "Check your inbox and confirm your email, then wait for admin approval before logging in.",
+      });
+
     }
     setLoading(false);
   };
