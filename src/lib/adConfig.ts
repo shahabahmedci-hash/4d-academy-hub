@@ -9,23 +9,23 @@ export const AD_CONFIG = {
   banner: {
     desktop: {
       atOptions: {
-        key: "b024d75e6c3bd263a57f21a31e7c1d85",
+        key: "b4f84ebaa6e36fc2d5af8636a6ee86dd",
         format: "iframe",
         height: 50,
         width: 320,
         params: {},
       },
-      scriptSrc: "//www.highperformanceformat.com/b024d75e6c3bd263a57f21a31e7c1d85/invoke.js",
+      scriptSrc: "//www.highperformanceformat.com/b4f84ebaa6e36fc2d5af8636a6ee86dd/invoke.js",
     },
     mobile: {
       atOptions: {
-        key: "b024d75e6c3bd263a57f21a31e7c1d85",
+        key: "b4f84ebaa6e36fc2d5af8636a6ee86dd",
         format: "iframe",
         height: 50,
         width: 320,
         params: {},
       },
-      scriptSrc: "//www.highperformanceformat.com/b024d75e6c3bd263a57f21a31e7c1d85/invoke.js",
+      scriptSrc: "//www.highperformanceformat.com/b4f84ebaa6e36fc2d5af8636a6ee86dd/invoke.js",
     },
   },
 } as const;
