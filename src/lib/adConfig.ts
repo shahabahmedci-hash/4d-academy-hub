@@ -2,6 +2,9 @@
 // Replace the placeholder values below with your actual Adsterra ad unit details.
 // You can get these from your Adsterra publisher dashboard after creating ad units.
 
+// Ad unit key used by the original 4D Academy app.
+const AD_KEY = "b024d75e6c3bd263a57f21a31e7c1d85";
+
 export const AD_CONFIG = {
   enabled: true,
   autoCloseSeconds: 0,
@@ -9,23 +12,23 @@ export const AD_CONFIG = {
   banner: {
     desktop: {
       atOptions: {
-        key: "b4f84ebaa6e36fc2d5af8636a6ee86dd",
+        key: AD_KEY,
         format: "iframe",
         height: 50,
         width: 320,
         params: {},
       },
-      scriptSrc: "//www.highperformanceformat.com/b4f84ebaa6e36fc2d5af8636a6ee86dd/invoke.js",
+      scriptSrc: `//www.highperformanceformat.com/${AD_KEY}/invoke.js`,
     },
     mobile: {
       atOptions: {
-        key: "b4f84ebaa6e36fc2d5af8636a6ee86dd",
+        key: AD_KEY,
         format: "iframe",
         height: 50,
         width: 320,
         params: {},
       },
-      scriptSrc: "//www.highperformanceformat.com/b4f84ebaa6e36fc2d5af8636a6ee86dd/invoke.js",
+      scriptSrc: `//www.highperformanceformat.com/${AD_KEY}/invoke.js`,
     },
   },
 } as const;

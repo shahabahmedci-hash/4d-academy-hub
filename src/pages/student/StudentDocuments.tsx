@@ -15,9 +15,33 @@ interface Doc {
   description: string | null;
   file_name: string;
   file_url: string;
+  file_type: string | null;
   file_size: number | null;
+  class: string | null;
+  section: string | null;
+  stream: string | null;
   created_at: string;
 }
+
+const FILE_TYPE_LABELS: Record<string, string> = {
+  "application/pdf": "PDF",
+  "application/msword": "Word",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "Word",
+  "application/vnd.ms-excel": "Excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "Excel",
+  "application/vnd.ms-powerpoint": "PowerPoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "PowerPoint",
+};
+
+const getFileTypeLabel = (mime: string | null) => (mime && FILE_TYPE_LABELS[mime]) || "Document";
+
+const formatFileSize = (bytes: number | null) => {
+  if (!bytes) return "Unknown size";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
 
 const StudentDocuments = () => {
   const navigate = useNavigate();
@@ -41,7 +65,7 @@ const StudentDocuments = () => {
   };
 
   const handleDownload = async (doc: Doc) => {
-    const { data, error } = await supabase.storage.from("documents").createSignedUrl(doc.file_url, 60 * 5);
+    const { data, error } = await supabase.storage.from("documents").createSignedUrl(doc.file_url, 3600);
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
       return;
@@ -77,8 +101,13 @@ const StudentDocuments = () => {
                 <CardContent className="flex items-center justify-between">
                   <div className="text-xs text-muted-foreground">
                     <p>{d.file_name}</p>
-                    {d.file_size && <p>{(d.file_size / 1024).toFixed(1)} KB</p>}
+                    <p>
+                      {getFileTypeLabel(d.file_type)} · {formatFileSize(d.file_size)}
+                      {d.class ? ` · Class ${d.class}${d.section ? `-${d.section}` : ""}` : ""}
+                      {d.stream ? ` · ${d.stream}` : ""}
+                    </p>
                   </div>
+
                   <Button size="sm" variant="outline" onClick={() => handleDownload(d)}>
                     <Download className="h-4 w-4 mr-1" /> Open
                   </Button>
