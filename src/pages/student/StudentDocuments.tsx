@@ -65,7 +65,7 @@ const StudentDocuments = () => {
   };
 
   const handleDownload = async (doc: Doc) => {
-    const { data, error } = await supabase.storage.from("documents").createSignedUrl(doc.file_url, 60 * 5);
+    const { data, error } = await supabase.storage.from("documents").createSignedUrl(doc.file_url, 3600);
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
       return;
@@ -101,8 +101,13 @@ const StudentDocuments = () => {
                 <CardContent className="flex items-center justify-between">
                   <div className="text-xs text-muted-foreground">
                     <p>{d.file_name}</p>
-                    {d.file_size && <p>{(d.file_size / 1024).toFixed(1)} KB</p>}
+                    <p>
+                      {getFileTypeLabel(d.file_type)} · {formatFileSize(d.file_size)}
+                      {d.class ? ` · Class ${d.class}${d.section ? `-${d.section}` : ""}` : ""}
+                      {d.stream ? ` · ${d.stream}` : ""}
+                    </p>
                   </div>
+
                   <Button size="sm" variant="outline" onClick={() => handleDownload(d)}>
                     <Download className="h-4 w-4 mr-1" /> Open
                   </Button>
