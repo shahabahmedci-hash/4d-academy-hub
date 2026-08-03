@@ -15,9 +15,33 @@ interface Doc {
   description: string | null;
   file_name: string;
   file_url: string;
+  file_type: string | null;
   file_size: number | null;
+  class: string | null;
+  section: string | null;
+  stream: string | null;
   created_at: string;
 }
+
+const FILE_TYPE_LABELS: Record<string, string> = {
+  "application/pdf": "PDF",
+  "application/msword": "Word",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "Word",
+  "application/vnd.ms-excel": "Excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "Excel",
+  "application/vnd.ms-powerpoint": "PowerPoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "PowerPoint",
+};
+
+const getFileTypeLabel = (mime: string | null) => (mime && FILE_TYPE_LABELS[mime]) || "Document";
+
+const formatFileSize = (bytes: number | null) => {
+  if (!bytes) return "Unknown size";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
 
 const StudentDocuments = () => {
   const navigate = useNavigate();
