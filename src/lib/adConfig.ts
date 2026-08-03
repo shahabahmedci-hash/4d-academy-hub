@@ -3,7 +3,7 @@
 // You can get these from your Adsterra publisher dashboard after creating ad units.
 
 // Ad unit key used by the original 4D Academy app.
-const AD_KEY = "b024d75e6c3bd263a57f21a31e7c1d85";
+const AD_KEY = "b4f84ebaa6e36fc2d5af8636a6ee86dd";
 
 export const AD_CONFIG = {
   enabled: true,
