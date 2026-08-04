@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
+  "main": "electron/main.cjs",
   "dependencies": {
     "@capacitor/android": "^8.5.0",
     "@capacitor/core": "^8.5.0",
