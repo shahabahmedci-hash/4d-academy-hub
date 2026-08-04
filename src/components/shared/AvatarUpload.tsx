@@ -12,6 +12,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import CameraCaptureDialog from "./CameraCaptureDialog";
+import { Capacitor } from "@capacitor/core";
+import { Camera as NativeCamera, CameraResultType, CameraSource } from "@capacitor/camera";
 
 interface AvatarUploadProps {
   userId: string;
@@ -80,6 +82,31 @@ export default function AvatarUpload({
     }
   };
 
+  const handleTakePhoto = async () => {
+    if (!Capacitor.isNativePlatform()) {
+      setCameraOpen(true);
+      return;
+    }
+    try {
+      const photo = await NativeCamera.getPhoto({
+        quality: 82,
+        allowEditing: true,
+        resultType: CameraResultType.DataUrl,
+        source: CameraSource.Camera,
+        width: 1200,
+        height: 1200,
+      });
+      if (!photo.dataUrl) return;
+      const response = await fetch(photo.dataUrl);
+      const blob = await response.blob();
+      await processFile(new File([blob], `avatar.${photo.format || "jpeg"}`, { type: blob.type || "image/jpeg" }));
+    } catch (error) {
+      if (error instanceof Error && !error.message.toLowerCase().includes("cancel")) {
+        toast({ variant: "destructive", title: "Camera unavailable", description: "Unable to capture a photo." });
+      }
+    }
+  };
+
   const handleDelete = async () => {
     if (!currentAvatarUrl) return;
     if (!window.confirm("Are you sure you want to remove your profile picture?")) return;
@@ -142,7 +169,7 @@ export default function AvatarUpload({
                     <Upload className="h-4 w-4 mr-2" />
                     Upload Photo
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setCameraOpen(true)}>
+                   <DropdownMenuItem onClick={() => void handleTakePhoto()}>
                     <Camera className="h-4 w-4 mr-2" />
                     Take Photo
                   </DropdownMenuItem>

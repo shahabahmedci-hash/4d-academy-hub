@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
+import NativeBridge from "@/components/shared/NativeBridge";
 import Auth from "./pages/Auth";
 import Index from "./pages/Index";
 import AdBanner from "@/components/shared/AdBanner";
@@ -56,6 +57,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <NativeBridge />
             <Routes>
               <Route path="/" element={<Auth />} />
               <Route path="/auth" element={<Auth />} />
