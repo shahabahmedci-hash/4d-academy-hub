@@ -275,17 +275,13 @@ const AdminAttendance = () => {
         const { data: studentsData, error: studentsError } = await supabase
           .from("students")
           .select("id, user_id, enrollment_date")
-          .in("id", studentIds);
+            .in("id", studentIds)
+            .lte("enrollment_date", selectedDate);
 
         if (studentsError) throw studentsError;
 
         if (studentsData && studentsData.length > 0) {
-          // Filter students who were enrolled on or before the selected date
-          const eligibleStudents = studentsData.filter(s => {
-            const enrolledDate = new Date(s.enrollment_date).setHours(0, 0, 0, 0);
-            const selectedDateObj = new Date(selectedDate).setHours(0, 0, 0, 0);
-            return enrolledDate <= selectedDateObj;
-          });
+          const eligibleStudents = studentsData;
 
           if (eligibleStudents.length === 0) {
             setStudents([]);
@@ -332,9 +328,12 @@ const AdminAttendance = () => {
 
       if (error) throw error;
 
+      const eligibleStudentIds = new Set(students.map((student) => student.id));
       const attendanceMap: Record<string, string> = {};
       data?.forEach((record) => {
-        attendanceMap[record.student_id] = record.status;
+        if (eligibleStudentIds.has(record.student_id)) {
+          attendanceMap[record.student_id] = record.status;
+        }
       });
       setAttendance(attendanceMap);
     } catch (error) {
@@ -366,15 +365,10 @@ const AdminAttendance = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
-      // Delete existing attendance for this class and date
-      await supabase
-        .from("attendance")
-        .delete()
-        .eq("class_id", selectedClass)
-        .eq("date", selectedDate);
-
-      // Insert new attendance records
-      const records = Object.entries(attendance).map(([studentId, status]) => ({
+      const eligibleStudentIds = new Set(students.map((student) => student.id));
+      const records = Object.entries(attendance)
+        .filter(([studentId]) => eligibleStudentIds.has(studentId))
+        .map(([studentId, status]) => ({
         student_id: studentId,
         class_id: selectedClass,
         date: selectedDate,
@@ -382,7 +376,10 @@ const AdminAttendance = () => {
         marked_by: user?.id,
       }));
 
-      const { error } = await supabase.from("attendance").insert(records);
+      if (records.length === 0) throw new Error("Mark attendance for at least one eligible student");
+      const { error } = await supabase
+        .from("attendance")
+        .upsert(records, { onConflict: "student_id,class_id,date" });
 
       if (error) throw error;
 
@@ -390,12 +387,12 @@ const AdminAttendance = () => {
         title: "Success",
         description: "Attendance saved successfully",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving attendance:", error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to save attendance",
+        description: error.message || "Failed to save attendance",
       });
     }
   };

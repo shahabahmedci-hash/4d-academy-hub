@@ -243,8 +243,9 @@ const TeacherAttendance = () => {
 
     const { data: teachers } = await supabase
       .from("teachers")
-      .select("id, employee_id, user_id")
-      .in("id", teacherIds);
+      .select("id, employee_id, user_id, joining_date")
+      .in("id", teacherIds)
+      .lte("joining_date", selectedDate);
 
     if (!teachers || teachers.length === 0) { setRecords([]); return; }
 
