@@ -328,12 +328,9 @@ const AdminAttendance = () => {
 
       if (error) throw error;
 
-      const eligibleStudentIds = new Set(students.map((student) => student.id));
       const attendanceMap: Record<string, string> = {};
       data?.forEach((record) => {
-        if (eligibleStudentIds.has(record.student_id)) {
-          attendanceMap[record.student_id] = record.status;
-        }
+        attendanceMap[record.student_id] = record.status;
       });
       setAttendance(attendanceMap);
     } catch (error) {
