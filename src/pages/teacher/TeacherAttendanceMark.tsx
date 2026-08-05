@@ -49,23 +49,49 @@ const TeacherAttendanceMark = () => {
   };
 
   const loadStudents = async () => {
-    const { data: enr } = await supabase.from("class_enrollments").select("student_id").eq("class_id", selectedClass);
-    const sids = (enr || []).map((e) => e.student_id);
-    if (sids.length === 0) { setStudents([]); return; }
-    const { data: studs } = await supabase.from("students").select("id, student_id, user_id, profiles:user_id(full_name)").in("id", sids);
-    setStudents((studs as any) || []);
-
     const dateStr = format(date, "yyyy-MM-dd");
+    const { data: enr, error: enrollmentError } = await supabase
+      .from("class_enrollments")
+      .select("student_id")
+      .eq("class_id", selectedClass);
+    if (enrollmentError) {
+      toast({ title: "Error", description: enrollmentError.message, variant: "destructive" });
+      setStudents([]);
+      return;
+    }
+    const sids = (enr || []).map((e) => e.student_id);
+    if (sids.length === 0) {
+      setStudents([]);
+      setAttendance({});
+      setExisting(false);
+      return;
+    }
+    const { data: studs, error: studentsError } = await supabase
+      .from("students")
+      .select("id, student_id, user_id, enrollment_date, profiles:user_id(full_name)")
+      .in("id", sids)
+      .lte("enrollment_date", dateStr);
+    if (studentsError) {
+      toast({ title: "Error", description: studentsError.message, variant: "destructive" });
+      setStudents([]);
+      return;
+    }
+    const eligibleStudents = (studs as any) || [];
+    setStudents(eligibleStudents);
+
     const { data: att } = await supabase.from("attendance").select("student_id, status").eq("class_id", selectedClass).eq("date", dateStr);
-    if (att?.length) {
+    const eligibleIds = new Set(eligibleStudents.map((student: any) => student.id));
+    const eligibleAttendance = (att || []).filter((record) => eligibleIds.has(record.student_id));
+    if (eligibleAttendance.length) {
       setExisting(true);
       const m: Record<string, string> = {};
-      att.forEach((a) => { m[a.student_id] = a.status; });
+      eligibleStudents.forEach((student: any) => { m[student.id] = "present"; });
+      eligibleAttendance.forEach((a) => { m[a.student_id] = a.status; });
       setAttendance(m);
     } else {
       setExisting(false);
       const m: Record<string, string> = {};
-      (studs || []).forEach((s: any) => { m[s.id] = "present"; });
+      eligibleStudents.forEach((student: any) => { m[student.id] = "present"; });
       setAttendance(m);
     }
   };
@@ -84,11 +110,13 @@ const TeacherAttendanceMark = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      if (existing) await supabase.from("attendance").delete().eq("class_id", selectedClass).eq("date", dateStr);
       const records = Object.entries(attendance).map(([student_id, status]) => ({
         student_id, class_id: selectedClass, date: dateStr, status: status as any, marked_by: user.id,
       }));
-      const { error } = await supabase.from("attendance").insert(records);
+      if (records.length === 0) throw new Error("No eligible students for this date");
+      const { error } = await supabase
+        .from("attendance")
+        .upsert(records, { onConflict: "student_id,class_id,date" });
       if (error) throw error;
       setExisting(true);
       toast({ title: "Saved", description: "Attendance recorded" });
