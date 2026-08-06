@@ -12,6 +12,7 @@ import { format } from "date-fns";
 import { useTeacherProfileGate } from "@/hooks/useTeacherProfileGate";
 import TeacherAttendancePieChart from "@/components/teacher/TeacherAttendancePieChart";
 import TeacherAttendanceMonthlyBreakdown from "@/components/teacher/TeacherAttendanceMonthlyBreakdown";
+import { useToast } from "@/hooks/use-toast";
 
 interface Att {
   id: string;
@@ -29,33 +30,40 @@ const TeacherMyAttendance = () => {
   const [yearId, setYearId] = useState<string>("");
   const [activeStatus, setActiveStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => { if (profileCompleted) load(); }, [profileCompleted]);
 
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { navigate("/"); return; }
-    const { data: teacher } = await supabase.from("teachers").select("id").eq("user_id", user.id).maybeSingle();
+    setLoadError(false);
+    const { data: teacher, error: teacherError } = await supabase.from("teachers").select("id").eq("user_id", user.id).maybeSingle();
+    if (teacherError) return failLoad(teacherError.message);
     if (!teacher) { setLoading(false); return; }
 
-    const { data: fy } = await supabase.from("financial_years").select("id, label, start_date, end_date").order("start_date", { ascending: false });
+    const { data: fy, error: yearError } = await supabase.from("financial_years").select("id, label, start_date, end_date").order("start_date", { ascending: false });
+    if (yearError) return failLoad(yearError.message);
     const ys = fy || [];
     setYears(ys);
     const today = new Date().toISOString().split("T")[0];
     const current = ys.find((y) => today >= y.start_date && today <= y.end_date) || ys[0];
     if (current) setYearId(current.id);
 
-    const { data } = await supabase
+    const { data, error: attendanceError } = await supabase
       .from("teacher_attendance")
       .select("*")
       .eq("teacher_id", teacher.id)
       .order("date", { ascending: false });
+    if (attendanceError) return failLoad(attendanceError.message);
 
     const recs = data || [];
     const classIds = [...new Set(recs.map((r) => r.class_id).filter(Boolean) as string[])];
     const cMap: Record<string, any> = {};
     if (classIds.length > 0) {
-      const { data: cls } = await supabase.from("classes").select("id, subject, class, section").in("id", classIds);
+      const { data: cls, error: classesError } = await supabase.from("classes").select("id, subject, class, section").in("id", classIds);
+      if (classesError) return failLoad(classesError.message);
       (cls || []).forEach((c) => { cMap[c.id] = c; });
     }
     setRecords(recs.map((r) => ({
@@ -63,6 +71,12 @@ const TeacherMyAttendance = () => {
       classes: (r.class_id && cMap[r.class_id]) || { subject: "General", class: null, section: null },
     })));
     setLoading(false);
+  };
+
+  const failLoad = (message: string) => {
+    setLoadError(true);
+    setLoading(false);
+    toast({ title: "Could not load attendance", description: message, variant: "destructive" });
   };
 
   const selectedYear = years.find((y) => y.id === yearId);
@@ -111,8 +125,10 @@ const TeacherMyAttendance = () => {
           />
         </div>
 
-        {visibleRecords.length === 0 ? (
-          <Card><CardContent className="py-12 text-center text-muted-foreground">No attendance records.</CardContent></Card>
+        {loadError ? (
+          <Card><CardContent className="py-12 text-center text-destructive">Attendance could not be loaded.</CardContent></Card>
+        ) : visibleRecords.length === 0 ? (
+          <Card><CardContent className="py-12 text-center text-muted-foreground">No attendance has been recorded by an admin or co-admin yet.</CardContent></Card>
         ) : (
           <div className="space-y-2">
             {visibleRecords.map((r) => (

@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Badge } from "@/components/ui/badge";
 import { Clock, MapPin, Users } from "lucide-react";
 import ProfileAvatar from "@/components/shared/ProfileAvatar";
+import { useToast } from "@/hooks/use-toast";
 
 interface Props {
   classId: string | null;
@@ -18,22 +19,39 @@ interface StudentRow {
   full_name: string;
   avatar_url: string | null;
   student_id: string | null;
+  class: string | null;
+  section: string | null;
 }
 
 const ClassDetailsDialog = ({ classId, open, onOpenChange }: Props) => {
   const [cls, setCls] = useState<any>(null);
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (!open || !classId) return;
     const load = async () => {
       setLoading(true);
-      const { data: c } = await supabase.from("classes").select("*").eq("id", classId).maybeSingle();
+      setLoadError(false);
+      const { data: c, error: classError } = await supabase.from("classes").select("*").eq("id", classId).maybeSingle();
+      if (classError) {
+        setLoadError(true);
+        setLoading(false);
+        toast({ title: "Could not load class", description: classError.message, variant: "destructive" });
+        return;
+      }
       setCls(c);
 
       // Enrolled students via class_enrollments
-      const { data: enr } = await supabase.from("class_enrollments").select("student_id").eq("class_id", classId);
+      const { data: enr, error: enrollmentError } = await supabase.from("class_enrollments").select("student_id").eq("class_id", classId);
+      if (enrollmentError) {
+        setLoadError(true);
+        setLoading(false);
+        toast({ title: "Could not load roster", description: enrollmentError.message, variant: "destructive" });
+        return;
+      }
       const enrolledIds = (enr || []).map((e) => e.student_id);
 
       // Also include students matching class/section
@@ -50,9 +68,23 @@ const ClassDetailsDialog = ({ classId, open, onOpenChange }: Props) => {
         return;
       }
 
-      const { data: studs } = await supabase.from("students").select("id, student_id, user_id").in("id", allIds);
+      const { data: studs, error: studentsError } = await supabase.from("students").select("id, student_id, user_id, class, section").in("id", allIds);
+      if (studentsError) {
+        setLoadError(true);
+        setLoading(false);
+        toast({ title: "Could not load students", description: studentsError.message, variant: "destructive" });
+        return;
+      }
       const userIds = (studs || []).map((s) => s.user_id).filter(Boolean);
-      const { data: profs } = await supabase.from("profiles").select("id, full_name, avatar_url").in("id", userIds);
+      const { data: profs, error: profilesError } = userIds.length > 0
+        ? await supabase.from("profiles").select("id, full_name, avatar_url").in("id", userIds)
+        : { data: [], error: null };
+      if (profilesError) {
+        setLoadError(true);
+        setLoading(false);
+        toast({ title: "Could not load student names", description: profilesError.message, variant: "destructive" });
+        return;
+      }
       const profMap = new Map((profs || []).map((p) => [p.id, p]));
       const rows: StudentRow[] = (studs || []).map((s) => {
         const p: any = profMap.get(s.user_id);
@@ -61,6 +93,8 @@ const ClassDetailsDialog = ({ classId, open, onOpenChange }: Props) => {
           full_name: p?.full_name || "Student",
           avatar_url: p?.avatar_url || null,
           student_id: s.student_id,
+          class: s.class,
+          section: s.section,
         };
       });
       rows.sort((a, b) => a.full_name.localeCompare(b.full_name));
@@ -95,6 +129,8 @@ const ClassDetailsDialog = ({ classId, open, onOpenChange }: Props) => {
           </div>
           {loading ? (
             <p className="text-sm text-muted-foreground">Loading...</p>
+          ) : loadError ? (
+            <p className="text-sm text-destructive">The class roster could not be loaded.</p>
           ) : students.length === 0 ? (
             <p className="text-sm text-muted-foreground">No students enrolled.</p>
           ) : (
@@ -105,6 +141,7 @@ const ClassDetailsDialog = ({ classId, open, onOpenChange }: Props) => {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{s.full_name}</p>
                     {s.student_id && <p className="text-xs text-muted-foreground">{s.student_id}</p>}
+                    {s.class && <p className="text-xs text-muted-foreground">Class {s.class}{s.section ? ` - ${s.section}` : ""}</p>}
                   </div>
                 </div>
               ))}
