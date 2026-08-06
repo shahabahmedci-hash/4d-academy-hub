@@ -29,6 +29,7 @@ const TeacherAttendanceMark = () => {
   const [students, setStudents] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<Record<string, string>>({});
   const [existing, setExisting] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => { if (profileCompleted) loadClasses(); }, [profileCompleted]);
   useEffect(() => { if (selectedClass) loadStudents(); }, [selectedClass, date]);
@@ -49,6 +50,7 @@ const TeacherAttendanceMark = () => {
   };
 
   const loadStudents = async () => {
+    setLoadError(false);
     const dateStr = format(date, "yyyy-MM-dd");
     const { data: enr, error: enrollmentError } = await supabase
       .from("class_enrollments")
@@ -57,6 +59,7 @@ const TeacherAttendanceMark = () => {
     if (enrollmentError) {
       toast({ title: "Error", description: enrollmentError.message, variant: "destructive" });
       setStudents([]);
+      setLoadError(true);
       return;
     }
     const sids = (enr || []).map((e) => e.student_id);
@@ -74,12 +77,18 @@ const TeacherAttendanceMark = () => {
     if (studentsError) {
       toast({ title: "Error", description: studentsError.message, variant: "destructive" });
       setStudents([]);
+      setLoadError(true);
       return;
     }
     const eligibleStudents = (studs as any) || [];
     setStudents(eligibleStudents);
 
-    const { data: att } = await supabase.from("attendance").select("student_id, status").eq("class_id", selectedClass).eq("date", dateStr);
+    const { data: att, error: attendanceError } = await supabase.from("attendance").select("student_id, status").eq("class_id", selectedClass).eq("date", dateStr);
+    if (attendanceError) {
+      setLoadError(true);
+      toast({ title: "Could not load attendance", description: attendanceError.message, variant: "destructive" });
+      return;
+    }
     const eligibleIds = new Set(eligibleStudents.map((student: any) => student.id));
     const eligibleAttendance = (att || []).filter((record) => eligibleIds.has(record.student_id));
     if (eligibleAttendance.length) {
@@ -180,7 +189,9 @@ const TeacherAttendanceMark = () => {
         )}
 
         {selectedClass && students.length === 0 && (
-          <Card><CardContent className="p-8 text-center text-muted-foreground">No students enrolled</CardContent></Card>
+          <Card><CardContent className={cn("p-8 text-center", loadError ? "text-destructive" : "text-muted-foreground")}>
+            {loadError ? "Students or attendance could not be loaded." : "No students are eligible for this date."}
+          </CardContent></Card>
         )}
       </div>
       <BottomNav role="teacher" />

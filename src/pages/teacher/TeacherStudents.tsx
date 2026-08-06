@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Search } from "lucide-react";
 import { useTeacherProfileGate } from "@/hooks/useTeacherProfileGate";
+import { useToast } from "@/hooks/use-toast";
 
 const TeacherStudents = () => {
   const navigate = useNavigate();
@@ -16,26 +17,46 @@ const TeacherStudents = () => {
   const [loading, setLoading] = useState(true);
   const [students, setStudents] = useState<any[]>([]);
   const [search, setSearch] = useState("");
+  const [loadError, setLoadError] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => { if (profileCompleted) load(); }, [profileCompleted]);
 
   const load = async () => {
+    setLoadError(false);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { navigate("/"); return; }
-    const { data: teacher } = await supabase.from("teachers").select("id").eq("user_id", user.id).maybeSingle();
+    const { data: teacher, error: teacherError } = await supabase.from("teachers").select("id").eq("user_id", user.id).maybeSingle();
+    if (teacherError) return failLoad(teacherError.message);
     if (teacher) {
-      const { data: tc } = await supabase.from("teacher_classes").select("class_id").eq("teacher_id", teacher.id);
+      const { data: tc, error: classesError } = await supabase.from("teacher_classes").select("class_id").eq("teacher_id", teacher.id);
+      if (classesError) return failLoad(classesError.message);
       const cids = (tc || []).map((c) => c.class_id);
       if (cids.length > 0) {
-        const { data: enr } = await supabase.from("class_enrollments").select("student_id").in("class_id", cids);
+        const { data: enr, error: enrollmentError } = await supabase.from("class_enrollments").select("student_id").in("class_id", cids);
+        if (enrollmentError) return failLoad(enrollmentError.message);
         const sids = [...new Set((enr || []).map((e) => e.student_id))];
         if (sids.length > 0) {
-          const { data: studs } = await supabase.from("students").select("id, student_id, class, section, user_id, profiles:user_id(full_name, email, avatar_url)").in("id", sids);
-          setStudents((studs as any) || []);
+          const { data: studs, error: studentsError } = await supabase.from("students").select("id, student_id, class, section, user_id").in("id", sids);
+          if (studentsError) return failLoad(studentsError.message);
+          const userIds = (studs || []).map((student) => student.user_id).filter(Boolean);
+          const { data: profiles, error: profilesError } = userIds.length > 0
+            ? await supabase.from("profiles").select("id, full_name, email, avatar_url").in("id", userIds)
+            : { data: [], error: null };
+          if (profilesError) return failLoad(profilesError.message);
+          const profileMap = new Map((profiles || []).map((profile) => [profile.id, profile]));
+          setStudents((studs || []).map((student) => ({ ...student, profiles: profileMap.get(student.user_id || "") })));
         }
       }
     }
     setLoading(false);
+  };
+
+  const failLoad = (message: string) => {
+    setLoadError(true);
+    setStudents([]);
+    setLoading(false);
+    toast({ title: "Could not load students", description: message, variant: "destructive" });
   };
 
   if (gateLoading || loading) return <PageSkeleton />;
@@ -59,7 +80,9 @@ const TeacherStudents = () => {
           <Input placeholder="Search students..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
 
-        {filtered.length === 0 ? (
+        {loadError ? (
+          <Card><CardContent className="p-8 text-center text-destructive">Students could not be loaded.</CardContent></Card>
+        ) : filtered.length === 0 ? (
           <Card><CardContent className="p-8 text-center text-muted-foreground">No students found</CardContent></Card>
         ) : (
           filtered.map((s) => (
