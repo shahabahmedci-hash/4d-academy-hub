@@ -123,6 +123,7 @@ export type Database = {
           notes: string | null
           status: Database["public"]["Enums"]["attendance_status"]
           student_id: string
+          updated_at: string
         }
         Insert: {
           class_id: string
@@ -133,6 +134,7 @@ export type Database = {
           notes?: string | null
           status?: Database["public"]["Enums"]["attendance_status"]
           student_id: string
+          updated_at?: string
         }
         Update: {
           class_id?: string
@@ -143,6 +145,7 @@ export type Database = {
           notes?: string | null
           status?: Database["public"]["Enums"]["attendance_status"]
           student_id?: string
+          updated_at?: string
         }
         Relationships: [
           {
@@ -650,6 +653,7 @@ export type Database = {
           emergency_contact_name: string | null
           emergency_contact_phone: string | null
           enrollment_date: string
+          exit_date: string | null
           father_name: string | null
           id: string
           section: string | null
@@ -666,6 +670,7 @@ export type Database = {
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           enrollment_date?: string
+          exit_date?: string | null
           father_name?: string | null
           id?: string
           section?: string | null
@@ -682,6 +687,7 @@ export type Database = {
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           enrollment_date?: string
+          exit_date?: string | null
           father_name?: string | null
           id?: string
           section?: string | null
@@ -702,7 +708,7 @@ export type Database = {
       }
       teacher_attendance: {
         Row: {
-          class_id: string | null
+          class_id: string
           created_at: string
           date: string
           id: string
@@ -710,9 +716,10 @@ export type Database = {
           notes: string | null
           status: string
           teacher_id: string
+          updated_at: string
         }
         Insert: {
-          class_id?: string | null
+          class_id: string
           created_at?: string
           date?: string
           id?: string
@@ -720,9 +727,10 @@ export type Database = {
           notes?: string | null
           status?: string
           teacher_id: string
+          updated_at?: string
         }
         Update: {
-          class_id?: string | null
+          class_id?: string
           created_at?: string
           date?: string
           id?: string
@@ -730,6 +738,7 @@ export type Database = {
           notes?: string | null
           status?: string
           teacher_id?: string
+          updated_at?: string
         }
         Relationships: [
           {
