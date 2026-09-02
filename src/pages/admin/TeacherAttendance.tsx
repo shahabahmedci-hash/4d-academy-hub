@@ -6,10 +6,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Save, FileDown, Trash2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { ArrowLeft, Save, FileDown, Trash2, Calendar as CalendarIcon, Lock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { format, subWeeks, addWeeks, startOfWeek, addDays } from "date-fns";
+import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { exportToCSV, formatDateForExport } from "@/lib/csvExport";
 import logo from "@/assets/4d-academy-logo.jpg";
@@ -17,99 +19,144 @@ import TeacherAttendancePieChart from "@/components/teacher/TeacherAttendancePie
 import TeacherAttendanceMonthlyBreakdown from "@/components/teacher/TeacherAttendanceMonthlyBreakdown";
 import { ImportTeacherAttendanceDialog } from "@/components/admin/ImportTeacherAttendanceDialog";
 import { useFinancialYearFreeze } from "@/hooks/useFinancialYearFreeze";
+import {
+  AttendanceRecord, AttendanceStatus, computeAttendanceStats, fetchClassTeacherAttendanceMap,
+  fetchTeacherAttendance, saveTeacherAttendance,
+} from "@/hooks/useAttendanceQuery";
 
-interface TeacherRecord {
-  teacherId: string;
-  name: string;
+interface TeacherOption {
+  id: string;
+  full_name: string;
   email: string;
-  employeeId: string | null;
-  status: "present" | "absent";
+  employee_id: string | null;
+  joining_date: string;
 }
 
-interface ClassOption {
+interface ClassRow {
   id: string;
   subject: string;
-  day_of_week: number;
   class: string | null;
   section: string | null;
 }
 
-const statusColors: Record<string, string> = {
-  present: "bg-emerald-500 hover:bg-emerald-600 text-white",
-  absent: "bg-destructive hover:bg-destructive/90 text-destructive-foreground",
-};
+const ALL = "__all__";
 
 function getAcademicYear(dateStr: string): string {
   const d = new Date(dateStr);
-  const month = d.getMonth();
-  const year = d.getFullYear();
-  const startYear = month >= 3 ? year : year - 1;
+  const startYear = d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1;
   return `${startYear}-${String(startYear + 1).slice(2)}`;
 }
 
-const TeacherHistoryView = ({ history, teacherName, onDelete }: {
-  history: any[];
-  teacherName: string;
+const TeacherHistoryView = ({ records, onDelete }: {
+  records: AttendanceRecord[];
   onDelete: (id: string) => void;
 }) => {
   const [activeStatus, setActiveStatus] = useState<string | null>(null);
+  const [classFilter, setClassFilter] = useState<string>(ALL);
+  const [batchFilter, setBatchFilter] = useState<string>(ALL);
+  const [dateFilter, setDateFilter] = useState<Date | undefined>();
 
-  const formattedRecords = useMemo(() => history.map((r: any) => ({
-    id: r.id,
-    date: r.date,
-    status: r.status,
-    notes: r.notes || null,
-    classes: r.classes || { subject: "Unknown", class: null, section: null },
-  })), [history]);
+  const classOptions = useMemo(
+    () => [...new Set(records.map((r) => r.classes.subject).filter(Boolean))].sort(), [records]);
+  const batchOptions = useMemo(
+    () => [...new Set(records.filter((r) => classFilter === ALL || r.classes.subject === classFilter)
+      .map((r) => r.classes.section).filter(Boolean) as string[])].sort(), [records, classFilter]);
 
-  const academicYear = useMemo(() => {
-    if (formattedRecords.length === 0) return "";
-    return getAcademicYear(formattedRecords[0].date);
-  }, [formattedRecords]);
+  const chartRecords = useMemo(() => records.filter((r) => {
+    if (classFilter !== ALL && r.classes.subject !== classFilter) return false;
+    if (batchFilter !== ALL && r.classes.section !== batchFilter) return false;
+    if (dateFilter && r.date !== format(dateFilter, "yyyy-MM-dd")) return false;
+    return true;
+  }), [records, classFilter, batchFilter, dateFilter]);
 
-  const stats = useMemo(() => {
-    const present = formattedRecords.filter((r: any) => r.status === "present").length;
-    const absent = formattedRecords.filter((r: any) => r.status === "absent").length;
-    const total = present + absent;
-    const percentage = total > 0 ? Math.round((present / total) * 100) : 0;
-    return { present, absent, total, percentage };
-  }, [formattedRecords]);
+  const filtered = useMemo(
+    () => (activeStatus ? chartRecords.filter((r) => r.status === activeStatus) : chartRecords),
+    [chartRecords, activeStatus]);
+
+  const stats = useMemo(() => computeAttendanceStats(chartRecords), [chartRecords]);
+  const academicYear = chartRecords.length > 0 ? getAcademicYear(chartRecords[0].date) : "";
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <Card>
+        <CardHeader><CardTitle className="text-base">Filters</CardTitle></CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Select value={classFilter} onValueChange={(v) => { setClassFilter(v); setBatchFilter(ALL); }}>
+            <SelectTrigger><SelectValue placeholder="Class" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All classes</SelectItem>
+              {classOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={batchFilter} onValueChange={setBatchFilter}>
+            <SelectTrigger><SelectValue placeholder="Batch" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All batches</SelectItem>
+              {batchOptions.map((b) => <SelectItem key={b} value={b}>Batch {b}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="justify-start font-normal">
+                <CalendarIcon className="mr-2 h-4 w-4" />{dateFilter ? format(dateFilter, "PPP") : "Any date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar mode="single" selected={dateFilter} onSelect={setDateFilter} initialFocus className={cn("p-3 pointer-events-auto")} />
+            </PopoverContent>
+          </Popover>
+          <Select value={activeStatus ?? ALL} onValueChange={(v) => setActiveStatus(v === ALL ? null : v)}>
+            <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All statuses</SelectItem>
+              <SelectItem value="present">Present</SelectItem>
+              <SelectItem value="absent">Absent</SelectItem>
+            </SelectContent>
+          </Select>
+          {(classFilter !== ALL || batchFilter !== ALL || dateFilter || activeStatus) && (
+            <Button variant="ghost" size="sm" className="justify-self-start" onClick={() => {
+              setClassFilter(ALL); setBatchFilter(ALL); setDateFilter(undefined); setActiveStatus(null);
+            }}>Clear filters</Button>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card><CardContent className="pt-6 text-center"><div className="text-3xl font-bold text-emerald-600">{stats.percentage}%</div><p className="text-xs text-muted-foreground">Attendance Rate</p></CardContent></Card>
         <Card><CardContent className="pt-6 text-center"><div className="text-3xl font-bold text-emerald-600">{stats.present}</div><p className="text-xs text-muted-foreground">Present</p></CardContent></Card>
         <Card><CardContent className="pt-6 text-center"><div className="text-3xl font-bold text-destructive">{stats.absent}</div><p className="text-xs text-muted-foreground">Absent</p></CardContent></Card>
+        <Card><CardContent className="pt-6 text-center"><div className="text-3xl font-bold">{stats.total}</div><p className="text-xs text-muted-foreground">Total Records</p></CardContent></Card>
       </div>
 
-      {formattedRecords.length > 0 && (
+      {chartRecords.length > 0 && (
         <div className="grid gap-6 lg:grid-cols-2">
-          <TeacherAttendancePieChart records={formattedRecords} onStatusClick={(s: string) => setActiveStatus((prev: string | null) => prev === s ? null : s)} activeStatus={activeStatus} />
-          <TeacherAttendanceMonthlyBreakdown records={formattedRecords} activeStatus={activeStatus} academicYear={academicYear} />
+          <TeacherAttendancePieChart records={chartRecords} onStatusClick={(s: string) => setActiveStatus((prev) => prev === s ? null : s)} activeStatus={activeStatus} />
+          <TeacherAttendanceMonthlyBreakdown records={chartRecords} activeStatus={activeStatus} academicYear={academicYear} />
         </div>
       )}
 
       <Card>
         <CardHeader>
           <CardTitle>Attendance Records</CardTitle>
-          <CardDescription>{history.length} records found</CardDescription>
+          <CardDescription>{filtered.length} records</CardDescription>
         </CardHeader>
         <CardContent>
-          {history.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">No attendance records found</p>
+          {filtered.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">No attendance records match these filters</p>
           ) : (
             <div className="space-y-3 max-h-[400px] overflow-y-auto">
-              {history.map((record: any) => (
+              {filtered.map((record) => (
                 <div key={record.id} className="flex items-center justify-between p-3 border rounded-lg">
                   <div>
-                    <p className="font-medium">{record.classes?.subject || "Unknown Class"}</p>
-                    <p className="text-sm text-muted-foreground">{new Date(record.date).toLocaleDateString()}</p>
+                    <p className="font-medium">{record.classes.subject}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {format(new Date(record.date), "PPP")}
+                      {record.classes.class ? ` · Class ${record.classes.class}` : ""}
+                      {record.classes.section ? ` · Batch ${record.classes.section}` : ""}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant={record.status === "present" ? "default" : "destructive"}>
-                      {record.status}
-                    </Badge>
+                    <Badge variant={record.status === "present" ? "default" : "destructive"}>{record.status}</Badge>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onDelete(record.id)} aria-label="Delete record">
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -129,221 +176,155 @@ const TeacherAttendance = () => {
   const [searchParams] = useSearchParams();
   const filterTeacherId = searchParams.get("teacher_id");
   const { toast } = useToast();
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [classes, setClasses] = useState<ClassOption[]>([]);
-  const [selectedClass, setSelectedClass] = useState<string>("");
-  const [selectedDate, setSelectedDate] = useState<string>("");
-  const [records, setRecords] = useState<TeacherRecord[]>([]);
-  const [teacherHistory, setTeacherHistory] = useState<any[]>([]);
-  const [teacherName, setTeacherName] = useState<string>("");
   const { isDateFrozen } = useFinancialYearFreeze();
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [teachers, setTeachers] = useState<TeacherOption[]>([]);
+  const [teacherClasses, setTeacherClasses] = useState<ClassRow[]>([]);
+  const [selectedTeacher, setSelectedTeacher] = useState<string>("");
+  const [batchFilter, setBatchFilter] = useState<string>(ALL);
+  const [selectedClass, setSelectedClass] = useState<string>("");
+  const [date, setDate] = useState<Date>(new Date());
+  const [status, setStatus] = useState<AttendanceStatus | null>(null);
+  const [existing, setExisting] = useState(false);
+  const [history, setHistory] = useState<AttendanceRecord[]>([]);
+  const [teacherName, setTeacherName] = useState<string>("");
 
-  const checkAuth = async () => {
+  const dateStr = format(date, "yyyy-MM-dd");
+  const frozen = isDateFrozen(dateStr);
+  const teacherInfo = useMemo(() => teachers.find((t) => t.id === selectedTeacher), [teachers, selectedTeacher]);
+  const beforeJoining = !!teacherInfo && dateStr < teacherInfo.joining_date;
+
+  useEffect(() => { init(); }, []);
+
+  const init = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { navigate("/"); return; }
     const [a, c] = await Promise.all([supabase.rpc("is_admin"), supabase.rpc("is_co_admin")]);
     if (!a.data && !c.data) { navigate("/"); return; }
+
+    if (filterTeacherId) await loadHistory();
+    else await loadTeachers();
     setLoading(false);
-
-    if (filterTeacherId) {
-      loadTeacherHistory();
-    } else {
-      loadClasses();
-    }
   };
 
-  const loadClasses = async () => {
-    const { data, error } = await supabase
-      .from("classes")
-      .select("id, subject, day_of_week, class, section")
-      .order("subject");
-    if (error) console.error("Error loading classes:", error);
-    setClasses(data || []);
+  const loadTeachers = async () => {
+    const { data: rows, error } = await supabase.from("teachers").select("id, employee_id, user_id, joining_date");
+    if (error) { toast({ variant: "destructive", title: "Error", description: error.message }); return; }
+    const userIds = (rows || []).map((t) => t.user_id).filter(Boolean) as string[];
+    const { data: profiles } = await supabase.from("profiles").select("id, full_name, email, archived").in("id", userIds);
+    const pMap = new Map((profiles || []).map((p) => [p.id, p]));
+    setTeachers((rows || [])
+      .filter((t) => !pMap.get(t.user_id!)?.archived)
+      .map((t) => ({
+        id: t.id,
+        employee_id: t.employee_id,
+        joining_date: t.joining_date,
+        full_name: pMap.get(t.user_id!)?.full_name || "Unknown Teacher",
+        email: pMap.get(t.user_id!)?.email || "",
+      }))
+      .sort((x, y) => x.full_name.localeCompare(y.full_name)));
   };
 
-  const loadTeacherHistory = async () => {
-    const { data: teacher } = await supabase
-      .from("teachers")
-      .select("user_id")
-      .eq("id", filterTeacherId!)
-      .maybeSingle();
-
+  const loadHistory = async () => {
+    const { data: teacher } = await supabase.from("teachers").select("user_id").eq("id", filterTeacherId!).maybeSingle();
     if (teacher?.user_id) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("full_name")
-        .eq("id", teacher.user_id)
-        .maybeSingle();
+      const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", teacher.user_id).maybeSingle();
       if (profile) setTeacherName(profile.full_name);
     }
-
-    const { data: records } = await supabase
-      .from("teacher_attendance")
-      .select("id, date, status, notes, classes:class_id(subject)")
-      .eq("teacher_id", filterTeacherId!)
-      .order("date", { ascending: false });
-
-    setTeacherHistory(records || []);
+    try {
+      setHistory(await fetchTeacherAttendance(filterTeacherId!));
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: e.message });
+    }
   };
 
-  const selectedClassInfo = useMemo(() => {
-    return classes.find(c => c.id === selectedClass);
-  }, [classes, selectedClass]);
+  // Teacher -> classes assigned to that teacher only
+  useEffect(() => {
+    setSelectedClass("");
+    setBatchFilter(ALL);
+    setTeacherClasses([]);
+    if (!selectedTeacher) return;
+    (async () => {
+      const { data: tc, error } = await supabase.from("teacher_classes").select("class_id").eq("teacher_id", selectedTeacher);
+      if (error) { toast({ variant: "destructive", title: "Error", description: error.message }); return; }
+      const ids = (tc || []).map((r) => r.class_id);
+      if (ids.length === 0) return;
+      const { data: cls } = await supabase.from("classes").select("id, subject, class, section").in("id", ids).order("subject");
+      setTeacherClasses(cls || []);
+    })();
+  }, [selectedTeacher]);
 
-  const validClassDates = useMemo(() => {
-    if (!selectedClassInfo) return [];
-    const dates: Date[] = [];
-    const today = new Date();
-    const startDate = subWeeks(today, 12);
-    const endDate = addWeeks(today, 4);
-    const startOfWeekDate = startOfWeek(startDate, { weekStartsOn: 0 });
-    let currentDate = addDays(startOfWeekDate, selectedClassInfo.day_of_week);
-    while (currentDate <= endDate) {
-      if (currentDate >= startDate) dates.push(new Date(currentDate));
-      currentDate = addDays(currentDate, 7);
-    }
-    return dates;
-  }, [selectedClassInfo]);
+  const batchOptions = useMemo(
+    () => [...new Set(teacherClasses.map((c) => c.section).filter(Boolean) as string[])].sort(), [teacherClasses]);
+  const visibleClasses = useMemo(
+    () => teacherClasses.filter((c) => batchFilter === ALL || c.section === batchFilter), [teacherClasses, batchFilter]);
 
   useEffect(() => {
-    if (selectedClass && validClassDates.length > 0) {
-      const today = new Date();
-      const pastDates = validClassDates.filter(d => d <= today);
-      if (pastDates.length > 0) {
-        setSelectedDate(format(pastDates[pastDates.length - 1], "yyyy-MM-dd"));
-      } else {
-        setSelectedDate(format(validClassDates[0], "yyyy-MM-dd"));
+    if (selectedClass && !visibleClasses.some((c) => c.id === selectedClass)) setSelectedClass("");
+  }, [visibleClasses, selectedClass]);
+
+  // Load the record for Teacher + Class + Date
+  useEffect(() => {
+    if (!selectedTeacher || !selectedClass) { setStatus(null); setExisting(false); return; }
+    (async () => {
+      try {
+        const map = await fetchClassTeacherAttendanceMap(selectedClass, dateStr);
+        const current = map[selectedTeacher];
+        if (current === "present" || current === "absent") { setStatus(current); setExisting(true); }
+        else { setStatus(null); setExisting(false); }
+      } catch (e: any) {
+        toast({ variant: "destructive", title: "Could not load record", description: e.message });
       }
-    }
-  }, [selectedClass, validClassDates]);
-
-  useEffect(() => {
-    if (selectedClass && selectedDate) {
-      loadTeachersForClass();
-    }
-  }, [selectedClass, selectedDate]);
-
-  const loadTeachersForClass = async () => {
-    if (!selectedClass || !selectedDate) return;
-
-    const { data: assignments, error: assignError } = await supabase
-      .from("teacher_classes")
-      .select("teacher_id")
-      .eq("class_id", selectedClass);
-
-    if (assignError) { console.error(assignError); return; }
-    if (!assignments || assignments.length === 0) { setRecords([]); return; }
-
-    const teacherIds = assignments.map(a => a.teacher_id);
-
-    const { data: teachers } = await supabase
-      .from("teachers")
-      .select("id, employee_id, user_id, joining_date")
-      .in("id", teacherIds)
-      .lte("joining_date", selectedDate);
-
-    if (!teachers || teachers.length === 0) { setRecords([]); return; }
-
-    const userIds = teachers.map(t => t.user_id).filter(Boolean);
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, full_name, email")
-      .in("id", userIds);
-    const profileMap = new Map((profiles || []).map(p => [p.id, { full_name: p.full_name, email: p.email }]));
-
-    const { data: existing } = await supabase
-      .from("teacher_attendance")
-      .select("teacher_id, status")
-      .eq("class_id", selectedClass)
-      .eq("date", selectedDate);
-    const existingMap = new Map((existing || []).map((e: any) => [e.teacher_id, e.status]));
-
-    const mapped: TeacherRecord[] = teachers.map(t => {
-      const profile = profileMap.get(t.user_id);
-      return {
-        teacherId: t.id,
-        name: profile?.full_name || "Unknown",
-        email: profile?.email || "",
-        employeeId: t.employee_id,
-        status: (existingMap.get(t.id) as any) || "present",
-      };
-    });
-
-    setRecords(mapped);
-  };
-
-  const toggleStatus = (idx: number, status: "present" | "absent") => {
-    setRecords(prev => prev.map((r, i) => i === idx ? { ...r, status } : r));
-  };
+    })();
+  }, [selectedTeacher, selectedClass, dateStr]);
 
   const handleSave = async () => {
-    if (!selectedClass) return;
-    if (isDateFrozen(selectedDate)) {
-      toast({ variant: "destructive", title: "Frozen period", description: "This date is in a frozen financial year." });
+    if (!selectedTeacher || !selectedClass || !status) return;
+    if (frozen) {
+      toast({ variant: "destructive", title: "Frozen period", description: "This date belongs to a frozen financial year." });
       return;
     }
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-
-      const rows = records.map(r => ({
-        teacher_id: r.teacherId,
-        class_id: selectedClass,
-        date: selectedDate,
-        status: r.status,
-        marked_by: user?.id,
-      }));
-
-      const { error } = await supabase
-        .from("teacher_attendance")
-        .upsert(rows, { onConflict: "teacher_id,class_id,date" });
-
-      if (error) throw error;
-
-      toast({ title: "Saved", description: `Teacher attendance saved for ${format(new Date(selectedDate), "dd MMM yyyy")}` });
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      await saveTeacherAttendance([{ teacher_id: selectedTeacher, class_id: selectedClass, date: dateStr, status }]);
+      setExisting(true);
+      toast({ title: "Saved", description: `Attendance saved for ${format(date, "dd MMM yyyy")}` });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: e.message });
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDeleteTeacherRecord = async (id: string) => {
-    const rec = teacherHistory.find((r: any) => r.id === id);
+  const handleDelete = async (id: string) => {
+    const rec = history.find((r) => r.id === id);
     if (rec && isDateFrozen(rec.date)) {
-      toast({ variant: "destructive", title: "Frozen", description: "Cannot delete frozen-period record." });
+      toast({ variant: "destructive", title: "Frozen", description: "Cannot delete a frozen-period record." });
       return;
     }
     const { error } = await supabase.from("teacher_attendance").delete().eq("id", id);
-    if (error) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to delete record" });
-    } else {
-      setTeacherHistory(prev => prev.filter(r => r.id !== id));
+    if (error) toast({ variant: "destructive", title: "Error", description: error.message });
+    else {
+      setHistory((prev) => prev.filter((r) => r.id !== id));
       toast({ title: "Deleted", description: "Attendance record deleted" });
     }
   };
 
-  const handleExportCSV = async () => {
-    // Get attendance record ids for export
-    const { data: attRecords } = await supabase
-      .from("teacher_attendance")
-      .select("id, teacher_id")
-      .eq("class_id", selectedClass)
-      .eq("date", selectedDate);
-    const attByTeacherId = Object.fromEntries((attRecords || []).map((r: any) => [r.teacher_id, r.id]));
-    const data = records.map(r => ({
-      id: attByTeacherId[r.teacherId] || "",
-      teacher_email: r.email,
-      class_subject: selectedClassInfo?.subject || "",
-      date: formatDateForExport(selectedDate),
-      status: r.status,
-    }));
-    exportToCSV(data, [
+  const handleExport = async () => {
+    if (!selectedTeacher || !selectedClass) return;
+    const { data: rows } = await supabase
+      .from("teacher_attendance").select("id, status").eq("class_id", selectedClass)
+      .eq("teacher_id", selectedTeacher).eq("date", dateStr);
+    const cls = teacherClasses.find((c) => c.id === selectedClass);
+    exportToCSV([{
+      id: rows?.[0]?.id || "",
+      teacher_email: teacherInfo?.email || "",
+      class_subject: cls?.subject || "",
+      date: formatDateForExport(dateStr),
+      status: status || "",
+    }], [
       { key: "id", label: "id" },
       { key: "teacher_email", label: "teacher_email" },
       { key: "class_subject", label: "class_subject" },
@@ -353,9 +334,7 @@ const TeacherAttendance = () => {
     navigate("/preview-download");
   };
 
-  if (loading) {
-    return <PageSkeleton />;
-  }
+  if (loading) return <PageSkeleton />;
 
   return (
     <div className="min-h-screen bg-background">
@@ -370,7 +349,7 @@ const TeacherAttendance = () => {
               {filterTeacherId ? `Attendance${teacherName ? ` — ${teacherName}` : ""}` : "Teacher Attendance"}
             </h1>
             <p className="text-sm text-muted-foreground">
-              {filterTeacherId ? "View attendance history" : "Mark teacher attendance by class"}
+              {filterTeacherId ? "View attendance history" : "Mark teacher attendance by class and batch"}
             </p>
           </div>
         </div>
@@ -378,110 +357,107 @@ const TeacherAttendance = () => {
 
       <main className="container mx-auto px-4 py-8 space-y-6">
         {filterTeacherId ? (
-          <TeacherHistoryView
-            history={teacherHistory}
-            teacherName={teacherName}
-            onDelete={handleDeleteTeacherRecord}
-          />
+          <TeacherHistoryView records={history} onDelete={handleDelete} />
         ) : (
           <>
             <Card>
               <CardHeader>
-                <CardTitle>Select Class and Date</CardTitle>
-                <CardDescription>Choose a class and date to mark teacher attendance</CardDescription>
+                <CardTitle>Select Teacher, Class, Batch and Date</CardTitle>
+                <CardDescription>Only classes assigned to the selected teacher are listed</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Class</label>
-                    <Select value={selectedClass} onValueChange={setSelectedClass}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a class" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {classes.map((cls) => (
-                          <SelectItem key={cls.id} value={cls.id}>
-                            {cls.subject}{cls.class ? ` — ${cls.class}` : ""}{cls.section ? ` (${cls.section})` : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Class Date</label>
-                    <Select value={selectedDate} onValueChange={setSelectedDate} disabled={!selectedClass}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a date" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {validClassDates.map((date) => (
-                          <SelectItem key={date.toISOString()} value={format(date, "yyyy-MM-dd")}>
-                            {format(date, "EEE, MMM d, yyyy")}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+              <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Teacher</label>
+                  <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
+                    <SelectTrigger><SelectValue placeholder="Select a teacher" /></SelectTrigger>
+                    <SelectContent>
+                      {teachers.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>{t.full_name}{t.employee_id ? ` (${t.employee_id})` : ""}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Batch</label>
+                  <Select value={batchFilter} onValueChange={setBatchFilter} disabled={!selectedTeacher}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>All batches</SelectItem>
+                      {batchOptions.map((b) => <SelectItem key={b} value={b}>Batch {b}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Class</label>
+                  <Select value={selectedClass} onValueChange={setSelectedClass} disabled={!selectedTeacher}>
+                    <SelectTrigger><SelectValue placeholder="Select a class" /></SelectTrigger>
+                    <SelectContent>
+                      {visibleClasses.map((cls) => (
+                        <SelectItem key={cls.id} value={cls.id}>
+                          {cls.subject}{cls.class ? ` — Class ${cls.class}` : ""}{cls.section ? ` (Batch ${cls.section})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Date</label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start font-normal">
+                        <CalendarIcon className="mr-2 h-4 w-4" />{format(date, "PPP")}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar mode="single" selected={date} onSelect={(d) => d && setDate(d)} initialFocus className={cn("p-3 pointer-events-auto")} />
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </CardContent>
             </Card>
 
-            {selectedClass && (
+            {selectedTeacher && !teacherClasses.length && (
+              <Card><CardContent className="py-8 text-center text-muted-foreground">This teacher has no assigned classes.</CardContent></Card>
+            )}
+
+            {frozen && (
+              <div className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                <Lock className="h-4 w-4" /> This date falls in a frozen financial year — attendance cannot be changed.
+              </div>
+            )}
+
+            {selectedTeacher && selectedClass && (
               <Card>
                 <CardHeader>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                      <CardTitle>Teacher List</CardTitle>
-                      <CardDescription>Mark teachers as present or absent</CardDescription>
+                      <CardTitle>{teacherInfo?.full_name}</CardTitle>
+                      <CardDescription>
+                        {existing ? "Existing record — update the status below" : "No record yet for this teacher, class and date"}
+                      </CardDescription>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" onClick={handleExportCSV} disabled={records.length === 0}>
-                        <FileDown className="h-4 w-4 mr-2" />
-                        Export CSV
+                      <Button variant="outline" onClick={handleExport} disabled={!status}>
+                        <FileDown className="h-4 w-4 mr-2" />Export CSV
                       </Button>
-                      <ImportTeacherAttendanceDialog onImported={() => {
-                        if (selectedClass && selectedDate) loadTeachersForClass();
-                      }} />
-                      <Button onClick={handleSave} disabled={saving || records.length === 0}>
-                        <Save className="h-4 w-4 mr-2" />
-                        {saving ? "Saving..." : "Save Attendance"}
+                      <ImportTeacherAttendanceDialog onImported={() => setDate(new Date(dateStr))} />
+                      <Button onClick={handleSave} disabled={saving || !status || frozen || beforeJoining}>
+                        <Save className="h-4 w-4 mr-2" />{saving ? "Saving..." : existing ? "Update" : "Save"}
                       </Button>
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  {records.length === 0 ? (
-                    <p className="text-muted-foreground text-center py-8">No teachers assigned to this class</p>
+                <CardContent className="space-y-4">
+                  {beforeJoining ? (
+                    <p className="text-destructive text-sm">
+                      This date is before the teacher's joining date ({format(new Date(teacherInfo!.joining_date), "PPP")}).
+                    </p>
                   ) : (
-                    <div className="space-y-3">
-                      {records.map((r, idx) => (
-                        <div
-                          key={r.teacherId}
-                          className="flex items-center justify-between p-3 rounded-lg border bg-card"
-                        >
-                          <div>
-                            <p className="font-medium">{r.name}</p>
-                            {r.employeeId && (
-                              <p className="text-xs text-muted-foreground">{r.employeeId}</p>
-                            )}
-                          </div>
-                          <div className="flex gap-2">
-                            {(["present", "absent"] as const).map((s) => (
-                              <Button
-                                key={s}
-                                size="sm"
-                                variant="outline"
-                                className={cn(
-                                  "capitalize min-w-[70px]",
-                                  r.status === s && statusColors[s]
-                                )}
-                                onClick={() => toggleStatus(idx, s)}
-                              >
-                                {s}
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
+                    <div className="flex gap-2">
+                      {(["present", "absent"] as const).map((s) => (
+                        <Button key={s} variant={status === s ? (s === "present" ? "default" : "destructive") : "outline"}
+                          className="capitalize min-w-[100px]" disabled={frozen}
+                          onClick={() => setStatus(s)}>{s}</Button>
                       ))}
                     </div>
                   )}
