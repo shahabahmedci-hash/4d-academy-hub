@@ -7,28 +7,29 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, ClipboardCheck } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { ArrowLeft, ClipboardCheck, Calendar as CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 import { useTeacherProfileGate } from "@/hooks/useTeacherProfileGate";
 import TeacherAttendancePieChart from "@/components/teacher/TeacherAttendancePieChart";
 import TeacherAttendanceMonthlyBreakdown from "@/components/teacher/TeacherAttendanceMonthlyBreakdown";
 import { useToast } from "@/hooks/use-toast";
+import { AttendanceRecord, computeAttendanceStats, fetchTeacherAttendance } from "@/hooks/useAttendanceQuery";
 
-interface Att {
-  id: string;
-  date: string;
-  status: string;
-  notes: string | null;
-  classes: { subject: string; class: string | null; section: string | null };
-}
+const ALL = "__all__";
 
 const TeacherMyAttendance = () => {
   const navigate = useNavigate();
   const { loading: gateLoading, profileCompleted } = useTeacherProfileGate();
-  const [records, setRecords] = useState<Att[]>([]);
+  const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [years, setYears] = useState<{ id: string; label: string; start_date: string; end_date: string }[]>([]);
   const [yearId, setYearId] = useState<string>("");
   const [activeStatus, setActiveStatus] = useState<string | null>(null);
+  const [subjectFilter, setSubjectFilter] = useState<string>(ALL);
+  const [batchFilter, setBatchFilter] = useState<string>(ALL);
+  const [dateFilter, setDateFilter] = useState<Date | undefined>();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const { toast } = useToast();
@@ -51,25 +52,11 @@ const TeacherMyAttendance = () => {
     const current = ys.find((y) => today >= y.start_date && today <= y.end_date) || ys[0];
     if (current) setYearId(current.id);
 
-    const { data, error: attendanceError } = await supabase
-      .from("teacher_attendance")
-      .select("*")
-      .eq("teacher_id", teacher.id)
-      .order("date", { ascending: false });
-    if (attendanceError) return failLoad(attendanceError.message);
-
-    const recs = data || [];
-    const classIds = [...new Set(recs.map((r) => r.class_id).filter(Boolean) as string[])];
-    const cMap: Record<string, any> = {};
-    if (classIds.length > 0) {
-      const { data: cls, error: classesError } = await supabase.from("classes").select("id, subject, class, section").in("id", classIds);
-      if (classesError) return failLoad(classesError.message);
-      (cls || []).forEach((c) => { cMap[c.id] = c; });
+    try {
+      setRecords(await fetchTeacherAttendance(teacher.id));
+    } catch (e: any) {
+      return failLoad(e.message);
     }
-    setRecords(recs.map((r) => ({
-      id: r.id, date: r.date, status: r.status, notes: r.notes,
-      classes: (r.class_id && cMap[r.class_id]) || { subject: "General", class: null, section: null },
-    })));
     setLoading(false);
   };
 
@@ -80,15 +67,25 @@ const TeacherMyAttendance = () => {
   };
 
   const selectedYear = years.find((y) => y.id === yearId);
-  const filteredRecords = useMemo(() => {
-    if (!selectedYear) return records;
-    return records.filter((r) => r.date >= selectedYear.start_date && r.date <= selectedYear.end_date);
-  }, [records, selectedYear]);
 
-  const visibleRecords = useMemo(() => {
-    if (!activeStatus) return filteredRecords;
-    return filteredRecords.filter((r) => r.status === activeStatus);
-  }, [filteredRecords, activeStatus]);
+  const subjectOptions = useMemo(
+    () => [...new Set(records.map((r) => r.classes.subject).filter(Boolean))].sort(), [records]);
+  const batchOptions = useMemo(
+    () => [...new Set(records.map((r) => r.classes.section).filter(Boolean) as string[])].sort(), [records]);
+
+  const filteredRecords = useMemo(() => records.filter((r) => {
+    if (selectedYear && !(r.date >= selectedYear.start_date && r.date <= selectedYear.end_date)) return false;
+    if (subjectFilter !== ALL && r.classes.subject !== subjectFilter) return false;
+    if (batchFilter !== ALL && r.classes.section !== batchFilter) return false;
+    if (dateFilter && r.date !== format(dateFilter, "yyyy-MM-dd")) return false;
+    return true;
+  }), [records, selectedYear, subjectFilter, batchFilter, dateFilter]);
+
+  const visibleRecords = useMemo(
+    () => (activeStatus ? filteredRecords.filter((r) => r.status === activeStatus) : filteredRecords),
+    [filteredRecords, activeStatus]);
+
+  const stats = useMemo(() => computeAttendanceStats(filteredRecords), [filteredRecords]);
 
   if (gateLoading || loading) return <PageSkeleton />;
 
@@ -103,14 +100,47 @@ const TeacherMyAttendance = () => {
       </header>
 
       <main className="container max-w-5xl mx-auto px-4 py-6 space-y-4">
-        {years.length > 0 && (
-          <Select value={yearId} onValueChange={(v) => { setYearId(v); setActiveStatus(null); }}>
-            <SelectTrigger className="w-full md:w-64"><SelectValue /></SelectTrigger>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {years.length > 0 && (
+            <Select value={yearId} onValueChange={(v) => { setYearId(v); setActiveStatus(null); }}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {years.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+          <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+            <SelectTrigger><SelectValue placeholder="Class" /></SelectTrigger>
             <SelectContent>
-              {years.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>)}
+              <SelectItem value={ALL}>All classes</SelectItem>
+              {subjectOptions.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
-        )}
+          <Select value={batchFilter} onValueChange={setBatchFilter}>
+            <SelectTrigger><SelectValue placeholder="Batch" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All batches</SelectItem>
+              {batchOptions.map((b) => <SelectItem key={b} value={b}>Batch {b}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="justify-start font-normal">
+                <CalendarIcon className="mr-2 h-4 w-4" />{dateFilter ? format(dateFilter, "PPP") : "Any date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar mode="single" selected={dateFilter} onSelect={setDateFilter} initialFocus className={cn("p-3 pointer-events-auto")} />
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold text-emerald-600">{stats.percentage}%</p><p className="text-xs text-muted-foreground">Attendance</p></CardContent></Card>
+          <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold text-emerald-600">{stats.present}</p><p className="text-xs text-muted-foreground">Present</p></CardContent></Card>
+          <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold text-destructive">{stats.absent}</p><p className="text-xs text-muted-foreground">Absent</p></CardContent></Card>
+          <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{stats.total}</p><p className="text-xs text-muted-foreground">Total</p></CardContent></Card>
+        </div>
 
         <div className="grid md:grid-cols-2 gap-4">
           <TeacherAttendancePieChart
@@ -136,7 +166,10 @@ const TeacherMyAttendance = () => {
                 <CardContent className="p-4 flex items-center justify-between">
                   <div>
                     <p className="font-medium">{r.classes.subject}</p>
-                    <p className="text-sm text-muted-foreground">{format(new Date(r.date), "PPP")}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {format(new Date(r.date), "PPP")}
+                      {r.classes.section ? ` · Batch ${r.classes.section}` : ""}
+                    </p>
                   </div>
                   <Badge variant={r.status === "present" ? "default" : "destructive"}>{r.status}</Badge>
                 </CardContent>

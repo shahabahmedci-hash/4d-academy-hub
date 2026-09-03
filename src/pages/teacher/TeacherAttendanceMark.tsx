@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import BottomNav from "@/components/shared/BottomNav";
@@ -9,12 +9,23 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { ArrowLeft, Calendar as CalendarIcon, Check, X, Save } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { ArrowLeft, Calendar as CalendarIcon, Check, X, Save, CheckCheck, Lock } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useTeacherProfileGate } from "@/hooks/useTeacherProfileGate";
 import { useFinancialYearFreeze } from "@/hooks/useFinancialYearFreeze";
+import {
+  AttendanceStatus, EligibleStudent, fetchClassAttendanceMap, fetchEligibleStudents, saveStudentAttendance,
+} from "@/hooks/useAttendanceQuery";
+
+interface ClassRow { id: string; subject: string; class: string | null; section: string | null }
+
+const ALL = "__all__";
 
 const TeacherAttendanceMark = () => {
   const navigate = useNavigate();
@@ -23,16 +34,21 @@ const TeacherAttendanceMark = () => {
   const { isDateFrozen } = useFinancialYearFreeze();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [classes, setClasses] = useState<any[]>([]);
+  const [classes, setClasses] = useState<ClassRow[]>([]);
+  const [batchFilter, setBatchFilter] = useState<string>(ALL);
   const [selectedClass, setSelectedClass] = useState("");
   const [date, setDate] = useState<Date>(new Date());
-  const [students, setStudents] = useState<any[]>([]);
-  const [attendance, setAttendance] = useState<Record<string, string>>({});
+  const [students, setStudents] = useState<EligibleStudent[]>([]);
+  const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
   const [existing, setExisting] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [confirmAllOpen, setConfirmAllOpen] = useState(false);
+
+  const dateStr = format(date, "yyyy-MM-dd");
+  const frozen = isDateFrozen(dateStr);
 
   useEffect(() => { if (profileCompleted) loadClasses(); }, [profileCompleted]);
-  useEffect(() => { if (selectedClass) loadStudents(); }, [selectedClass, date]);
+  useEffect(() => { if (selectedClass) loadStudents(); else { setStudents([]); setAttendance({}); } }, [selectedClass, dateStr]);
 
   const loadClasses = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -42,66 +58,42 @@ const TeacherAttendanceMark = () => {
       const { data: tc } = await supabase.from("teacher_classes").select("class_id").eq("teacher_id", teacher.id);
       const ids = (tc || []).map((c) => c.class_id);
       if (ids.length > 0) {
-        const { data: cls } = await supabase.from("classes").select("*").in("id", ids);
+        const { data: cls } = await supabase.from("classes").select("id, subject, class, section").in("id", ids).order("subject");
         setClasses(cls || []);
       }
     }
     setLoading(false);
   };
 
+  const batchOptions = useMemo(
+    () => [...new Set(classes.map((c) => c.section).filter(Boolean) as string[])].sort(), [classes]);
+  const visibleClasses = useMemo(
+    () => classes.filter((c) => batchFilter === ALL || c.section === batchFilter), [classes, batchFilter]);
+
+  useEffect(() => {
+    if (selectedClass && !visibleClasses.some((c) => c.id === selectedClass)) setSelectedClass("");
+  }, [visibleClasses, selectedClass]);
+
   const loadStudents = async () => {
     setLoadError(false);
-    const dateStr = format(date, "yyyy-MM-dd");
-    const { data: enr, error: enrollmentError } = await supabase
-      .from("class_enrollments")
-      .select("student_id")
-      .eq("class_id", selectedClass);
-    if (enrollmentError) {
-      toast({ title: "Error", description: enrollmentError.message, variant: "destructive" });
-      setStudents([]);
-      setLoadError(true);
-      return;
-    }
-    const sids = (enr || []).map((e) => e.student_id);
-    if (sids.length === 0) {
+    try {
+      const eligible = await fetchEligibleStudents(selectedClass, dateStr);
+      setStudents(eligible);
+      const existingMap = await fetchClassAttendanceMap(selectedClass, dateStr);
+      const map: Record<string, AttendanceStatus> = {};
+      let found = false;
+      eligible.forEach((s) => {
+        const status = existingMap[s.id];
+        if (status === "present" || status === "absent") { map[s.id] = status; found = true; }
+        else map[s.id] = "present";
+      });
+      setExisting(found);
+      setAttendance(map);
+    } catch (e: any) {
       setStudents([]);
       setAttendance({});
-      setExisting(false);
-      return;
-    }
-    const { data: studs, error: studentsError } = await supabase
-      .from("students")
-      .select("id, student_id, user_id, enrollment_date, profiles:user_id(full_name)")
-      .in("id", sids)
-      .lte("enrollment_date", dateStr);
-    if (studentsError) {
-      toast({ title: "Error", description: studentsError.message, variant: "destructive" });
-      setStudents([]);
       setLoadError(true);
-      return;
-    }
-    const eligibleStudents = (studs as any) || [];
-    setStudents(eligibleStudents);
-
-    const { data: att, error: attendanceError } = await supabase.from("attendance").select("student_id, status").eq("class_id", selectedClass).eq("date", dateStr);
-    if (attendanceError) {
-      setLoadError(true);
-      toast({ title: "Could not load attendance", description: attendanceError.message, variant: "destructive" });
-      return;
-    }
-    const eligibleIds = new Set(eligibleStudents.map((student: any) => student.id));
-    const eligibleAttendance = (att || []).filter((record) => eligibleIds.has(record.student_id));
-    if (eligibleAttendance.length) {
-      setExisting(true);
-      const m: Record<string, string> = {};
-      eligibleStudents.forEach((student: any) => { m[student.id] = "present"; });
-      eligibleAttendance.forEach((a) => { m[a.student_id] = a.status; });
-      setAttendance(m);
-    } else {
-      setExisting(false);
-      const m: Record<string, string> = {};
-      eligibleStudents.forEach((student: any) => { m[student.id] = "present"; });
-      setAttendance(m);
+      toast({ title: "Could not load roster", description: e.message, variant: "destructive" });
     }
   };
 
@@ -109,24 +101,25 @@ const TeacherAttendanceMark = () => {
     setAttendance((p) => ({ ...p, [id]: p[id] === "present" ? "absent" : "present" }));
   };
 
+  const markAllPresent = () => {
+    const map: Record<string, AttendanceStatus> = {};
+    students.forEach((s) => { map[s.id] = "present"; });
+    setAttendance(map);
+    setConfirmAllOpen(false);
+  };
+
   const save = async () => {
-    const dateStr = format(date, "yyyy-MM-dd");
-    if (isDateFrozen(dateStr)) {
+    if (frozen) {
       toast({ title: "Frozen period", description: "This date is in a frozen financial year.", variant: "destructive" });
       return;
     }
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const records = Object.entries(attendance).map(([student_id, status]) => ({
-        student_id, class_id: selectedClass, date: dateStr, status: status as any, marked_by: user.id,
+      const rows = students.map((s) => ({
+        student_id: s.id, class_id: selectedClass, date: dateStr, status: attendance[s.id] || "present",
       }));
-      if (records.length === 0) throw new Error("No eligible students for this date");
-      const { error } = await supabase
-        .from("attendance")
-        .upsert(records, { onConflict: "student_id,class_id,date" });
-      if (error) throw error;
+      if (rows.length === 0) throw new Error("No eligible students for this date");
+      await saveStudentAttendance(rows);
       setExisting(true);
       toast({ title: "Saved", description: "Attendance recorded" });
     } catch (e: any) {
@@ -135,8 +128,8 @@ const TeacherAttendanceMark = () => {
   };
 
   if (gateLoading || loading) return <PageSkeleton />;
-  const present = Object.values(attendance).filter((s) => s === "present").length;
-  const absent = Object.values(attendance).filter((s) => s === "absent").length;
+  const present = students.filter((s) => attendance[s.id] === "present").length;
+  const absent = students.filter((s) => attendance[s.id] === "absent").length;
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -148,52 +141,95 @@ const TeacherAttendanceMark = () => {
       </div>
 
       <div className="p-4 space-y-4">
-        <Select value={selectedClass} onValueChange={setSelectedClass}>
-          <SelectTrigger><SelectValue placeholder="Select a class" /></SelectTrigger>
-          <SelectContent>
-            {classes.map((c) => (
-              <SelectItem key={c.id} value={c.id}>{c.subject} {c.class ? `- Class ${c.class}` : ""}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Select value={batchFilter} onValueChange={setBatchFilter}>
+            <SelectTrigger><SelectValue placeholder="Batch" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All batches</SelectItem>
+              {batchOptions.map((b) => <SelectItem key={b} value={b}>Batch {b}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={selectedClass} onValueChange={setSelectedClass}>
+            <SelectTrigger><SelectValue placeholder="Select a class" /></SelectTrigger>
+            <SelectContent>
+              {visibleClasses.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.subject}{c.class ? ` — Class ${c.class}` : ""}{c.section ? ` (Batch ${c.section})` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline" className="w-full justify-start"><CalendarIcon className="mr-2 h-4 w-4" />{format(date, "PPP")}</Button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={date} onSelect={(d) => d && setDate(d)} className="p-3 pointer-events-auto" /></PopoverContent>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar mode="single" selected={date} onSelect={(d) => d && setDate(d)} initialFocus className={cn("p-3 pointer-events-auto")} />
+          </PopoverContent>
         </Popover>
+
+        {frozen && (
+          <div className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <Lock className="h-4 w-4" /> Frozen financial year — attendance cannot be changed.
+          </div>
+        )}
 
         {selectedClass && students.length > 0 && (
           <>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Badge variant="default">{present} Present</Badge>
               <Badge variant="destructive">{absent} Absent</Badge>
+              <Badge variant="outline">{students.length} Total</Badge>
             </div>
+            <Button variant="outline" className="w-full" onClick={() => setConfirmAllOpen(true)} disabled={frozen}>
+              <CheckCheck className="h-4 w-4 mr-2" />Mark all Present
+            </Button>
             <Card><CardContent className="p-0">
               {students.map((s, i) => (
                 <div key={s.id} className={cn("flex items-center justify-between px-4 py-3", i < students.length - 1 && "border-b")}>
                   <div>
-                    <p className="font-medium text-sm">{(s.profiles as any)?.full_name || "Unknown"}</p>
-                    {s.student_id && <p className="text-xs text-muted-foreground">{s.student_id}</p>}
+                    <p className="font-medium text-sm">{s.full_name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {s.student_id || "No ID"}{s.section ? ` · Batch ${s.section}` : ""}
+                    </p>
                   </div>
-                  <Button variant={attendance[s.id] === "present" ? "default" : "destructive"} size="sm" onClick={() => toggle(s.id)}>
+                  <Button variant={attendance[s.id] === "present" ? "default" : "destructive"} size="sm" disabled={frozen} onClick={() => toggle(s.id)}>
                     {attendance[s.id] === "present" ? <Check className="h-4 w-4 mr-1" /> : <X className="h-4 w-4 mr-1" />}
                     {attendance[s.id] === "present" ? "P" : "A"}
                   </Button>
                 </div>
               ))}
             </CardContent></Card>
-            <Button className="w-full" onClick={save} disabled={saving}><Save className="h-4 w-4 mr-2" />{saving ? "Saving..." : existing ? "Update" : "Save"}</Button>
+            <Button className="w-full" onClick={save} disabled={saving || frozen}>
+              <Save className="h-4 w-4 mr-2" />{saving ? "Saving..." : existing ? "Update" : "Save"}
+            </Button>
           </>
         )}
 
         {selectedClass && students.length === 0 && (
           <Card><CardContent className={cn("p-8 text-center", loadError ? "text-destructive" : "text-muted-foreground")}>
-            {loadError ? "Students or attendance could not be loaded." : "No students are eligible for this date."}
+            {loadError ? "Students or attendance could not be loaded." : "No students belonged to this class on the selected date."}
           </CardContent></Card>
         )}
       </div>
+
+      <AlertDialog open={confirmAllOpen} onOpenChange={setConfirmAllOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mark all students present?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This sets all {students.length} listed students to Present for {format(date, "PPP")}. Nothing is stored until you press Save.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={markAllPresent}>Mark all Present</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <BottomNav role="teacher" />
     </div>
   );
