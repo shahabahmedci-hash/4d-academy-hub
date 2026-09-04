@@ -65,9 +65,8 @@ const StudentDashboard = () => {
         supabase.from("class_enrollments").select("class_id").eq("student_id", student.id),
       ]);
 
-      const att = attRes.data || [];
-      const present = att.filter((a) => a.status === "present").length;
-      const rate = att.length > 0 ? Math.round((present / att.length) * 100) : 0;
+      const rate = computeAttendanceStats(attRes.data || []).percentage;
+
 
       const classIds = (enrollRes.data || []).map((e) => e.class_id);
       let todays = 0;
