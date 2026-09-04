@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Calendar, ClipboardCheck, IndianRupee, FileText, LogOut, User, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { computeAttendanceStats } from "@/hooks/useAttendanceQuery";
+
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
