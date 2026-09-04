@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Calendar, ClipboardCheck, IndianRupee, FileText, LogOut, User, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { computeAttendanceStats } from "@/hooks/useAttendanceQuery";
+
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
@@ -65,9 +67,8 @@ const StudentDashboard = () => {
         supabase.from("class_enrollments").select("class_id").eq("student_id", student.id),
       ]);
 
-      const att = attRes.data || [];
-      const present = att.filter((a) => a.status === "present").length;
-      const rate = att.length > 0 ? Math.round((present / att.length) * 100) : 0;
+      const rate = computeAttendanceStats(attRes.data || []).percentage;
+
 
       const classIds = (enrollRes.data || []).map((e) => e.class_id);
       let todays = 0;
