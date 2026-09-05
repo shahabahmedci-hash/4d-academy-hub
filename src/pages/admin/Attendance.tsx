@@ -72,14 +72,14 @@ const StudentAttendanceHistoryView = ({ records, onDelete }: {
     if (!isWithinRange(r.date, dateRange)) return false;
     if (activeStatus && r.status !== activeStatus) return false;
     return true;
-  }), [records, classFilter, batchFilter, dateFilter, activeStatus]);
+  }), [records, classFilter, batchFilter, dateRange, activeStatus]);
 
   const chartRecords = useMemo(() => records.filter((r) => {
     if (classFilter !== ALL && r.classes.class !== classFilter) return false;
     if (batchFilter !== ALL && r.classes.section !== batchFilter) return false;
     if (!isWithinRange(r.date, dateRange)) return false;
     return true;
-  }), [records, classFilter, batchFilter, dateFilter]);
+  }), [records, classFilter, batchFilter, dateRange]);
 
   const stats = useMemo(() => computeAttendanceStats(chartRecords), [chartRecords]);
   const academicYear = chartRecords.length > 0 ? getAcademicYear(chartRecords[0].date) : "";

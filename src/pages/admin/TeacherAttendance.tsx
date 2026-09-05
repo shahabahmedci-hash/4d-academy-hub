@@ -69,7 +69,7 @@ const TeacherHistoryView = ({ records, onDelete }: {
     if (batchFilter !== ALL && r.classes.section !== batchFilter) return false;
     if (!isWithinRange(r.date, dateRange)) return false;
     return true;
-  }), [records, classFilter, batchFilter, dateFilter]);
+  }), [records, classFilter, batchFilter, dateRange]);
 
   const filtered = useMemo(
     () => (activeStatus ? chartRecords.filter((r) => r.status === activeStatus) : chartRecords),
