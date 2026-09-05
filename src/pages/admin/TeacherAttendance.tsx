@@ -200,7 +200,13 @@ const TeacherAttendance = () => {
     if (!a.data && !c.data) { navigate("/"); return; }
 
     if (filterTeacherId) await loadHistory();
-    else await loadTeachers();
+    else {
+      await loadTeachers();
+      if (deepClass) {
+        const { data: tc } = await supabase.from("teacher_classes").select("teacher_id").eq("class_id", deepClass);
+        if (tc && tc.length === 1) setSelectedTeacher(tc[0].teacher_id);
+      }
+    }
     setLoading(false);
   };
 
@@ -259,6 +265,11 @@ const TeacherAttendance = () => {
   useEffect(() => {
     if (selectedClass && !visibleClasses.some((c) => c.id === selectedClass)) setSelectedClass("");
   }, [visibleClasses, selectedClass]);
+
+  // Preselect the class from a coverage deep link once the teacher's classes load.
+  useEffect(() => {
+    if (deepClass && !selectedClass && teacherClasses.some((c) => c.id === deepClass)) setSelectedClass(deepClass);
+  }, [teacherClasses, deepClass]);
 
   // Load the record for Teacher + Class + Date
   useEffect(() => {
