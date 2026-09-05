@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { ArrowLeft, Save, FileDown, Trash2, Calendar as CalendarIcon, Lock } from "lucide-react";
+import { ArrowLeft, Save, FileDown, Trash2, Calendar as CalendarIcon, Lock, ClipboardList } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -19,6 +19,8 @@ import TeacherAttendancePieChart from "@/components/teacher/TeacherAttendancePie
 import TeacherAttendanceMonthlyBreakdown from "@/components/teacher/TeacherAttendanceMonthlyBreakdown";
 import { ImportTeacherAttendanceDialog } from "@/components/admin/ImportTeacherAttendanceDialog";
 import { useFinancialYearFreeze } from "@/hooks/useFinancialYearFreeze";
+import DateRangePicker from "@/components/shared/DateRangePicker";
+import { DateRange, isWithinRange } from "@/lib/dateRange";
 import {
   AttendanceRecord, AttendanceStatus, computeAttendanceStats, fetchClassTeacherAttendanceMap,
   fetchTeacherAttendance, saveTeacherAttendance,
@@ -54,7 +56,7 @@ const TeacherHistoryView = ({ records, onDelete }: {
   const [activeStatus, setActiveStatus] = useState<string | null>(null);
   const [classFilter, setClassFilter] = useState<string>(ALL);
   const [batchFilter, setBatchFilter] = useState<string>(ALL);
-  const [dateFilter, setDateFilter] = useState<Date | undefined>();
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
   const classOptions = useMemo(
     () => [...new Set(records.map((r) => r.classes.subject).filter(Boolean))].sort(), [records]);
@@ -65,9 +67,9 @@ const TeacherHistoryView = ({ records, onDelete }: {
   const chartRecords = useMemo(() => records.filter((r) => {
     if (classFilter !== ALL && r.classes.subject !== classFilter) return false;
     if (batchFilter !== ALL && r.classes.section !== batchFilter) return false;
-    if (dateFilter && r.date !== format(dateFilter, "yyyy-MM-dd")) return false;
+    if (!isWithinRange(r.date, dateRange)) return false;
     return true;
-  }), [records, classFilter, batchFilter, dateFilter]);
+  }), [records, classFilter, batchFilter, dateRange]);
 
   const filtered = useMemo(
     () => (activeStatus ? chartRecords.filter((r) => r.status === activeStatus) : chartRecords),
@@ -95,16 +97,7 @@ const TeacherHistoryView = ({ records, onDelete }: {
               {batchOptions.map((b) => <SelectItem key={b} value={b}>Batch {b}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="justify-start font-normal">
-                <CalendarIcon className="mr-2 h-4 w-4" />{dateFilter ? format(dateFilter, "PPP") : "Any date"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar mode="single" selected={dateFilter} onSelect={setDateFilter} initialFocus className={cn("p-3 pointer-events-auto")} />
-            </PopoverContent>
-          </Popover>
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
           <Select value={activeStatus ?? ALL} onValueChange={(v) => setActiveStatus(v === ALL ? null : v)}>
             <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
@@ -113,9 +106,9 @@ const TeacherHistoryView = ({ records, onDelete }: {
               <SelectItem value="absent">Absent</SelectItem>
             </SelectContent>
           </Select>
-          {(classFilter !== ALL || batchFilter !== ALL || dateFilter || activeStatus) && (
+          {(classFilter !== ALL || batchFilter !== ALL || dateRange || activeStatus) && (
             <Button variant="ghost" size="sm" className="justify-self-start" onClick={() => {
-              setClassFilter(ALL); setBatchFilter(ALL); setDateFilter(undefined); setActiveStatus(null);
+              setClassFilter(ALL); setBatchFilter(ALL); setDateRange(undefined); setActiveStatus(null);
             }}>Clear filters</Button>
           )}
         </CardContent>
@@ -175,6 +168,8 @@ const TeacherAttendance = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const filterTeacherId = searchParams.get("teacher_id");
+  const deepClass = searchParams.get("class");
+  const deepDate = searchParams.get("date");
   const { toast } = useToast();
   const { isDateFrozen } = useFinancialYearFreeze();
 
@@ -185,7 +180,7 @@ const TeacherAttendance = () => {
   const [selectedTeacher, setSelectedTeacher] = useState<string>("");
   const [batchFilter, setBatchFilter] = useState<string>(ALL);
   const [selectedClass, setSelectedClass] = useState<string>("");
-  const [date, setDate] = useState<Date>(new Date());
+  const [date, setDate] = useState<Date>(deepDate ? new Date(`${deepDate}T00:00:00`) : new Date());
   const [status, setStatus] = useState<AttendanceStatus | null>(null);
   const [existing, setExisting] = useState(false);
   const [history, setHistory] = useState<AttendanceRecord[]>([]);
@@ -205,7 +200,13 @@ const TeacherAttendance = () => {
     if (!a.data && !c.data) { navigate("/"); return; }
 
     if (filterTeacherId) await loadHistory();
-    else await loadTeachers();
+    else {
+      await loadTeachers();
+      if (deepClass) {
+        const { data: tc } = await supabase.from("teacher_classes").select("teacher_id").eq("class_id", deepClass);
+        if (tc && tc.length === 1) setSelectedTeacher(tc[0].teacher_id);
+      }
+    }
     setLoading(false);
   };
 
@@ -264,6 +265,11 @@ const TeacherAttendance = () => {
   useEffect(() => {
     if (selectedClass && !visibleClasses.some((c) => c.id === selectedClass)) setSelectedClass("");
   }, [visibleClasses, selectedClass]);
+
+  // Preselect the class from a coverage deep link once the teacher's classes load.
+  useEffect(() => {
+    if (deepClass && !selectedClass && teacherClasses.some((c) => c.id === deepClass)) setSelectedClass(deepClass);
+  }, [teacherClasses, deepClass]);
 
   // Load the record for Teacher + Class + Date
   useEffect(() => {
@@ -352,6 +358,9 @@ const TeacherAttendance = () => {
               {filterTeacherId ? "View attendance history" : "Mark teacher attendance by class and batch"}
             </p>
           </div>
+          <Button variant="outline" className="ml-auto" onClick={() => navigate("/admin/attendance/coverage")}>
+            <ClipboardList className="h-4 w-4 mr-2" />Coverage
+          </Button>
         </div>
       </header>
 

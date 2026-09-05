@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, IndianRupee, Calendar, TrendingUp, LogOut, Receipt, User, FileText, Archive, GraduationCap, ShieldCheck, Lock, ClipboardCheck, Zap } from "lucide-react";
+import { Users, IndianRupee, Calendar, TrendingUp, LogOut, Receipt, User, FileText, Archive, GraduationCap, ShieldCheck, Lock, ClipboardCheck, Zap, ClipboardList, ChevronRight } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import logo from "@/assets/logo.png";
@@ -14,6 +14,7 @@ import AdBanner from "@/components/shared/AdBanner";
 import { Skeleton } from "@/components/ui/skeleton";
 import AIInsightsPanel from "@/components/admin/AIInsightsPanel";
 import DashboardAutomationCard from "@/components/admin/DashboardAutomationCard";
+import { fetchUnmarkedCount } from "@/hooks/useAttendanceCoverage";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -29,10 +30,17 @@ const AdminDashboard = () => {
     pendingApprovals: 0,
   });
 
+  const [unmarkedSessions, setUnmarkedSessions] = useState<number | null>(null);
+
   useEffect(() => {
     const init = async () => {
       await checkAuth();
       await loadDashboardData();
+      try {
+        setUnmarkedSessions(await fetchUnmarkedCount(30));
+      } catch {
+        setUnmarkedSessions(null);
+      }
     };
     init();
   }, []);
@@ -115,6 +123,7 @@ const AdminDashboard = () => {
     { label: "Expenses", icon: Receipt, path: "/admin/expenses" },
     { label: "Teacher Attendance", icon: ClipboardCheck, path: "/admin/teacher-attendance" },
     { label: "Students Attendance", icon: ClipboardCheck, path: "/admin/attendance" },
+    { label: "Attendance Coverage", icon: ClipboardList, path: "/admin/attendance/coverage" },
     { label: "Class Schedule", icon: Calendar, path: "/admin/classes" },
     { label: "Analytics", icon: TrendingUp, path: "/admin/analytics" },
     { label: "User Approvals", icon: Users, path: "/admin/approvals" },
@@ -199,6 +208,22 @@ const AdminDashboard = () => {
             </CardContent>
           </Card>
         </div>
+
+        {unmarkedSessions !== null && unmarkedSessions > 0 && (
+          <button
+            onClick={() => navigate("/admin/attendance/coverage")}
+            className="w-full flex items-center justify-between gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-left"
+          >
+            <div className="flex items-center gap-3">
+              <ClipboardList className="h-5 w-5 text-destructive" />
+              <div>
+                <p className="text-sm font-semibold text-destructive">{unmarkedSessions} sessions need attendance</p>
+                <p className="text-xs text-muted-foreground">Classes in the last 30 days that are not fully marked</p>
+              </div>
+            </div>
+            <ChevronRight className="h-4 w-4 text-destructive" />
+          </button>
+        )}
 
         {/* Quick Actions */}
         <Card>

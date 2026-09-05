@@ -12,7 +12,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, FileDown, Trash2, Calendar as CalendarIcon, CheckCheck, Lock, Save } from "lucide-react";
+import { ArrowLeft, FileDown, Trash2, Calendar as CalendarIcon, CheckCheck, Lock, Save, ClipboardList } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ImportAttendanceDialog } from "@/components/admin/ImportAttendanceDialog";
 import { useToast } from "@/hooks/use-toast";
@@ -22,6 +22,8 @@ import { exportToCSV, formatDateForExport } from "@/lib/csvExport";
 import AttendancePieChart from "@/components/student/AttendancePieChart";
 import AttendanceMonthlyBreakdown from "@/components/student/AttendanceMonthlyBreakdown";
 import { useFinancialYearFreeze } from "@/hooks/useFinancialYearFreeze";
+import DateRangePicker from "@/components/shared/DateRangePicker";
+import { DateRange, isWithinRange } from "@/lib/dateRange";
 import {
   AttendanceRecord, AttendanceStatus, EligibleStudent, computeAttendanceStats,
   fetchClassAttendanceMap, fetchEligibleStudents, fetchStudentAttendance, saveStudentAttendance,
@@ -50,7 +52,7 @@ const StudentAttendanceHistoryView = ({ records, onDelete }: {
   const [activeStatus, setActiveStatus] = useState<string | null>(null);
   const [classFilter, setClassFilter] = useState<string>(ALL);
   const [batchFilter, setBatchFilter] = useState<string>(ALL);
-  const [dateFilter, setDateFilter] = useState<Date | undefined>();
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
   const classOptions = useMemo(
     () => [...new Set(records.map((r) => r.classes.class).filter(Boolean) as string[])].sort(),
@@ -67,17 +69,17 @@ const StudentAttendanceHistoryView = ({ records, onDelete }: {
   const filtered = useMemo(() => records.filter((r) => {
     if (classFilter !== ALL && r.classes.class !== classFilter) return false;
     if (batchFilter !== ALL && r.classes.section !== batchFilter) return false;
-    if (dateFilter && r.date !== format(dateFilter, "yyyy-MM-dd")) return false;
+    if (!isWithinRange(r.date, dateRange)) return false;
     if (activeStatus && r.status !== activeStatus) return false;
     return true;
-  }), [records, classFilter, batchFilter, dateFilter, activeStatus]);
+  }), [records, classFilter, batchFilter, dateRange, activeStatus]);
 
   const chartRecords = useMemo(() => records.filter((r) => {
     if (classFilter !== ALL && r.classes.class !== classFilter) return false;
     if (batchFilter !== ALL && r.classes.section !== batchFilter) return false;
-    if (dateFilter && r.date !== format(dateFilter, "yyyy-MM-dd")) return false;
+    if (!isWithinRange(r.date, dateRange)) return false;
     return true;
-  }), [records, classFilter, batchFilter, dateFilter]);
+  }), [records, classFilter, batchFilter, dateRange]);
 
   const stats = useMemo(() => computeAttendanceStats(chartRecords), [chartRecords]);
   const academicYear = chartRecords.length > 0 ? getAcademicYear(chartRecords[0].date) : "";
@@ -101,17 +103,7 @@ const StudentAttendanceHistoryView = ({ records, onDelete }: {
               {batchOptions.map((b) => <SelectItem key={b} value={b}>Batch {b}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="justify-start font-normal">
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {dateFilter ? format(dateFilter, "PPP") : "Any date"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar mode="single" selected={dateFilter} onSelect={setDateFilter} initialFocus className={cn("p-3 pointer-events-auto")} />
-            </PopoverContent>
-          </Popover>
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
           <Select value={activeStatus ?? ALL} onValueChange={(v) => setActiveStatus(v === ALL ? null : v)}>
             <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
@@ -120,9 +112,9 @@ const StudentAttendanceHistoryView = ({ records, onDelete }: {
               <SelectItem value="absent">Absent</SelectItem>
             </SelectContent>
           </Select>
-          {(classFilter !== ALL || batchFilter !== ALL || dateFilter || activeStatus) && (
+          {(classFilter !== ALL || batchFilter !== ALL || dateRange || activeStatus) && (
             <Button variant="ghost" size="sm" className="justify-self-start" onClick={() => {
-              setClassFilter(ALL); setBatchFilter(ALL); setDateFilter(undefined); setActiveStatus(null);
+              setClassFilter(ALL); setBatchFilter(ALL); setDateRange(undefined); setActiveStatus(null);
             }}>Clear filters</Button>
           )}
         </CardContent>
@@ -182,6 +174,8 @@ const AdminAttendance = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const filterStudentId = searchParams.get("student_id");
+  const deepClass = searchParams.get("class");
+  const deepDate = searchParams.get("date");
   const { toast } = useToast();
   const { isDateFrozen } = useFinancialYearFreeze();
 
@@ -194,7 +188,7 @@ const AdminAttendance = () => {
   const [gradeFilter, setGradeFilter] = useState<string>(ALL);
   const [batchFilter, setBatchFilter] = useState<string>(ALL);
   const [selectedClass, setSelectedClass] = useState<string>("");
-  const [date, setDate] = useState<Date>(new Date());
+  const [date, setDate] = useState<Date>(deepDate ? new Date(`${deepDate}T00:00:00`) : new Date());
   const [students, setStudents] = useState<EligibleStudent[]>([]);
   const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
   const [confirmAllOpen, setConfirmAllOpen] = useState(false);
@@ -216,6 +210,7 @@ const AdminAttendance = () => {
     } else {
       const { data } = await supabase.from("classes").select("id, subject, class, section, day_of_week").order("subject");
       setClasses(data || []);
+      if (deepClass && (data || []).some((c) => c.id === deepClass)) setSelectedClass(deepClass);
     }
     setLoading(false);
   };
@@ -343,6 +338,9 @@ const AdminAttendance = () => {
               {filterStudentId ? "View attendance history" : "Record student attendance for classes"}
             </p>
           </div>
+          <Button variant="outline" className="ml-auto" onClick={() => navigate("/admin/attendance/coverage")}>
+            <ClipboardList className="h-4 w-4 mr-2" />Coverage
+          </Button>
         </div>
       </header>
 

@@ -21,6 +21,7 @@ import Expenses from "./pages/admin/Expenses";
 import Salaries from "./pages/admin/Salaries";
 import Attendance from "./pages/admin/Attendance";
 import TeacherAttendance from "./pages/admin/TeacherAttendance";
+import AttendanceCoverage from "./pages/admin/AttendanceCoverage";
 import Classes from "./pages/admin/Classes";
 import Analytics from "./pages/admin/Analytics";
 import ArchivedProfiles from "./pages/admin/ArchivedProfiles";
@@ -73,6 +74,7 @@ const App = () => (
               <Route path="/admin/expenses" element={<Expenses />} />
               <Route path="/admin/salaries" element={<Salaries />} />
               <Route path="/admin/attendance" element={<Attendance />} />
+              <Route path="/admin/attendance/coverage" element={<AttendanceCoverage />} />
               <Route path="/admin/teacher-attendance" element={<TeacherAttendance />} />
               <Route path="/admin/classes" element={<Classes />} />
               <Route path="/admin/analytics" element={<Analytics />} />
