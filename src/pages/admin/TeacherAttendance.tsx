@@ -19,6 +19,8 @@ import TeacherAttendancePieChart from "@/components/teacher/TeacherAttendancePie
 import TeacherAttendanceMonthlyBreakdown from "@/components/teacher/TeacherAttendanceMonthlyBreakdown";
 import { ImportTeacherAttendanceDialog } from "@/components/admin/ImportTeacherAttendanceDialog";
 import { useFinancialYearFreeze } from "@/hooks/useFinancialYearFreeze";
+import DateRangePicker from "@/components/shared/DateRangePicker";
+import { DateRange, isWithinRange } from "@/lib/dateRange";
 import {
   AttendanceRecord, AttendanceStatus, computeAttendanceStats, fetchClassTeacherAttendanceMap,
   fetchTeacherAttendance, saveTeacherAttendance,
@@ -54,7 +56,7 @@ const TeacherHistoryView = ({ records, onDelete }: {
   const [activeStatus, setActiveStatus] = useState<string | null>(null);
   const [classFilter, setClassFilter] = useState<string>(ALL);
   const [batchFilter, setBatchFilter] = useState<string>(ALL);
-  const [dateFilter, setDateFilter] = useState<Date | undefined>();
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
   const classOptions = useMemo(
     () => [...new Set(records.map((r) => r.classes.subject).filter(Boolean))].sort(), [records]);
@@ -65,7 +67,7 @@ const TeacherHistoryView = ({ records, onDelete }: {
   const chartRecords = useMemo(() => records.filter((r) => {
     if (classFilter !== ALL && r.classes.subject !== classFilter) return false;
     if (batchFilter !== ALL && r.classes.section !== batchFilter) return false;
-    if (dateFilter && r.date !== format(dateFilter, "yyyy-MM-dd")) return false;
+    if (!isWithinRange(r.date, dateRange)) return false;
     return true;
   }), [records, classFilter, batchFilter, dateFilter]);
 
@@ -95,16 +97,7 @@ const TeacherHistoryView = ({ records, onDelete }: {
               {batchOptions.map((b) => <SelectItem key={b} value={b}>Batch {b}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="justify-start font-normal">
-                <CalendarIcon className="mr-2 h-4 w-4" />{dateFilter ? format(dateFilter, "PPP") : "Any date"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar mode="single" selected={dateFilter} onSelect={setDateFilter} initialFocus className={cn("p-3 pointer-events-auto")} />
-            </PopoverContent>
-          </Popover>
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
           <Select value={activeStatus ?? ALL} onValueChange={(v) => setActiveStatus(v === ALL ? null : v)}>
             <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
@@ -113,9 +106,9 @@ const TeacherHistoryView = ({ records, onDelete }: {
               <SelectItem value="absent">Absent</SelectItem>
             </SelectContent>
           </Select>
-          {(classFilter !== ALL || batchFilter !== ALL || dateFilter || activeStatus) && (
+          {(classFilter !== ALL || batchFilter !== ALL || dateRange || activeStatus) && (
             <Button variant="ghost" size="sm" className="justify-self-start" onClick={() => {
-              setClassFilter(ALL); setBatchFilter(ALL); setDateFilter(undefined); setActiveStatus(null);
+              setClassFilter(ALL); setBatchFilter(ALL); setDateRange(undefined); setActiveStatus(null);
             }}>Clear filters</Button>
           )}
         </CardContent>
