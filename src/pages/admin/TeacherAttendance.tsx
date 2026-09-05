@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { ArrowLeft, Save, FileDown, Trash2, Calendar as CalendarIcon, Lock } from "lucide-react";
+import { ArrowLeft, Save, FileDown, Trash2, Calendar as CalendarIcon, Lock, ClipboardList } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -168,6 +168,8 @@ const TeacherAttendance = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const filterTeacherId = searchParams.get("teacher_id");
+  const deepClass = searchParams.get("class");
+  const deepDate = searchParams.get("date");
   const { toast } = useToast();
   const { isDateFrozen } = useFinancialYearFreeze();
 
@@ -178,7 +180,7 @@ const TeacherAttendance = () => {
   const [selectedTeacher, setSelectedTeacher] = useState<string>("");
   const [batchFilter, setBatchFilter] = useState<string>(ALL);
   const [selectedClass, setSelectedClass] = useState<string>("");
-  const [date, setDate] = useState<Date>(new Date());
+  const [date, setDate] = useState<Date>(deepDate ? new Date(`${deepDate}T00:00:00`) : new Date());
   const [status, setStatus] = useState<AttendanceStatus | null>(null);
   const [existing, setExisting] = useState(false);
   const [history, setHistory] = useState<AttendanceRecord[]>([]);
@@ -345,6 +347,9 @@ const TeacherAttendance = () => {
               {filterTeacherId ? "View attendance history" : "Mark teacher attendance by class and batch"}
             </p>
           </div>
+          <Button variant="outline" className="ml-auto" onClick={() => navigate("/admin/attendance/coverage")}>
+            <ClipboardList className="h-4 w-4 mr-2" />Coverage
+          </Button>
         </div>
       </header>
 

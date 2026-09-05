@@ -12,7 +12,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, FileDown, Trash2, Calendar as CalendarIcon, CheckCheck, Lock, Save } from "lucide-react";
+import { ArrowLeft, FileDown, Trash2, Calendar as CalendarIcon, CheckCheck, Lock, Save, ClipboardList } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ImportAttendanceDialog } from "@/components/admin/ImportAttendanceDialog";
 import { useToast } from "@/hooks/use-toast";
@@ -174,6 +174,8 @@ const AdminAttendance = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const filterStudentId = searchParams.get("student_id");
+  const deepClass = searchParams.get("class");
+  const deepDate = searchParams.get("date");
   const { toast } = useToast();
   const { isDateFrozen } = useFinancialYearFreeze();
 
@@ -186,7 +188,7 @@ const AdminAttendance = () => {
   const [gradeFilter, setGradeFilter] = useState<string>(ALL);
   const [batchFilter, setBatchFilter] = useState<string>(ALL);
   const [selectedClass, setSelectedClass] = useState<string>("");
-  const [date, setDate] = useState<Date>(new Date());
+  const [date, setDate] = useState<Date>(deepDate ? new Date(`${deepDate}T00:00:00`) : new Date());
   const [students, setStudents] = useState<EligibleStudent[]>([]);
   const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
   const [confirmAllOpen, setConfirmAllOpen] = useState(false);
@@ -208,6 +210,7 @@ const AdminAttendance = () => {
     } else {
       const { data } = await supabase.from("classes").select("id, subject, class, section, day_of_week").order("subject");
       setClasses(data || []);
+      if (deepClass && (data || []).some((c) => c.id === deepClass)) setSelectedClass(deepClass);
     }
     setLoading(false);
   };
@@ -335,6 +338,9 @@ const AdminAttendance = () => {
               {filterStudentId ? "View attendance history" : "Record student attendance for classes"}
             </p>
           </div>
+          <Button variant="outline" className="ml-auto" onClick={() => navigate("/admin/attendance/coverage")}>
+            <ClipboardList className="h-4 w-4 mr-2" />Coverage
+          </Button>
         </div>
       </header>
 
