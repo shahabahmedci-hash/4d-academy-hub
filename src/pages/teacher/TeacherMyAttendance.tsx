@@ -16,6 +16,8 @@ import { useTeacherProfileGate } from "@/hooks/useTeacherProfileGate";
 import TeacherAttendancePieChart from "@/components/teacher/TeacherAttendancePieChart";
 import TeacherAttendanceMonthlyBreakdown from "@/components/teacher/TeacherAttendanceMonthlyBreakdown";
 import { useToast } from "@/hooks/use-toast";
+import DateRangePicker from "@/components/shared/DateRangePicker";
+import { DateRange, isWithinRange } from "@/lib/dateRange";
 import { AttendanceRecord, computeAttendanceStats, fetchTeacherAttendance } from "@/hooks/useAttendanceQuery";
 
 const ALL = "__all__";
@@ -29,7 +31,7 @@ const TeacherMyAttendance = () => {
   const [activeStatus, setActiveStatus] = useState<string | null>(null);
   const [subjectFilter, setSubjectFilter] = useState<string>(ALL);
   const [batchFilter, setBatchFilter] = useState<string>(ALL);
-  const [dateFilter, setDateFilter] = useState<Date | undefined>();
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const { toast } = useToast();
@@ -77,9 +79,9 @@ const TeacherMyAttendance = () => {
     if (selectedYear && !(r.date >= selectedYear.start_date && r.date <= selectedYear.end_date)) return false;
     if (subjectFilter !== ALL && r.classes.subject !== subjectFilter) return false;
     if (batchFilter !== ALL && r.classes.section !== batchFilter) return false;
-    if (dateFilter && r.date !== format(dateFilter, "yyyy-MM-dd")) return false;
+    if (!isWithinRange(r.date, dateRange)) return false;
     return true;
-  }), [records, selectedYear, subjectFilter, batchFilter, dateFilter]);
+  }), [records, selectedYear, subjectFilter, batchFilter, dateRange]);
 
   const visibleRecords = useMemo(
     () => (activeStatus ? filteredRecords.filter((r) => r.status === activeStatus) : filteredRecords),
@@ -123,16 +125,7 @@ const TeacherMyAttendance = () => {
               {batchOptions.map((b) => <SelectItem key={b} value={b}>Batch {b}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="justify-start font-normal">
-                <CalendarIcon className="mr-2 h-4 w-4" />{dateFilter ? format(dateFilter, "PPP") : "Any date"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar mode="single" selected={dateFilter} onSelect={setDateFilter} initialFocus className={cn("p-3 pointer-events-auto")} />
-            </PopoverContent>
-          </Popover>
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
