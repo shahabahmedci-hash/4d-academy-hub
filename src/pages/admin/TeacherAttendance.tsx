@@ -21,7 +21,7 @@ import { ImportTeacherAttendanceDialog } from "@/components/admin/ImportTeacherA
 import { useFinancialYearFreeze } from "@/hooks/useFinancialYearFreeze";
 import DateRangePicker from "@/components/shared/DateRangePicker";
 import { DateRange, isWithinRange } from "@/lib/dateRange";
-import { DAY_NAMES, isMarkableSessionDate, latestSessionOnOrBefore } from "@/lib/sessionDates";
+import { DAY_NAMES, countPersonSessions, isMarkableSessionDate, latestSessionOnOrBefore } from "@/lib/sessionDates";
 import {
   AttendanceRecord, AttendanceStatus, computeAttendanceStats, fetchClassTeacherAttendanceMap,
   fetchTeacherAttendance, saveTeacherAttendance,
@@ -59,6 +59,16 @@ const TeacherHistoryView = ({ records, onDelete }: {
   const [classFilter, setClassFilter] = useState<string>(ALL);
   const [batchFilter, setBatchFilter] = useState<string>(ALL);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [dowByClass, setDowByClass] = useState<Record<string, number>>({});
+  const { isDateFrozen } = useFinancialYearFreeze();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from("classes").select("id, day_of_week");
+      setDowByClass(Object.fromEntries((data || []).map((c: any) => [c.id, c.day_of_week])));
+    })();
+  }, []);
 
   const classOptions = useMemo(
     () => [...new Set(records.map((r) => r.classes.subject).filter(Boolean))].sort(), [records]);
@@ -78,6 +88,10 @@ const TeacherHistoryView = ({ records, onDelete }: {
     [chartRecords, activeStatus]);
 
   const stats = useMemo(() => computeAttendanceStats(chartRecords), [chartRecords]);
+  const sessionCount = useMemo(
+    () => countPersonSessions(chartRecords, dowByClass, dateRange, isDateFrozen),
+    [chartRecords, dowByClass, dateRange, isDateFrozen],
+  );
   const academicYear = chartRecords.length > 0 ? getAcademicYear(chartRecords[0].date) : "";
 
   return (
@@ -113,6 +127,23 @@ const TeacherHistoryView = ({ records, onDelete }: {
               setClassFilter(ALL); setBatchFilter(ALL); setDateRange(undefined); setActiveStatus(null);
             }}>Clear filters</Button>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-6 grid grid-cols-3 gap-4 text-center">
+          <div>
+            <div className="text-2xl font-bold">{sessionCount.scheduled}</div>
+            <p className="text-xs text-muted-foreground">Scheduled sessions</p>
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-emerald-600">{sessionCount.marked}</div>
+            <p className="text-xs text-muted-foreground">Marked</p>
+          </div>
+          <button className="text-left sm:text-center" onClick={() => navigate("/admin/attendance/coverage")}>
+            <div className="text-2xl font-bold text-destructive underline-offset-4 hover:underline">{sessionCount.unmarked}</div>
+            <p className="text-xs text-muted-foreground">Not marked</p>
+          </button>
         </CardContent>
       </Card>
 
