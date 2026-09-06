@@ -239,9 +239,23 @@ const AdminAttendance = () => {
 
   const selectedClassInfo = useMemo(() => classes.find((c) => c.id === selectedClass), [classes, selectedClass]);
 
+  const sessionOpts = useMemo(() => ({
+    dayOfWeek: selectedClassInfo?.day_of_week ?? null,
+    isFrozen: isDateFrozen,
+  }), [selectedClassInfo, isDateFrozen]);
+
+  // Snap the date onto a real session day whenever the class changes.
+  useEffect(() => {
+    if (!selectedClassInfo) return;
+    if (isMarkableSessionDate(date, sessionOpts)) return;
+    const next = latestSessionOnOrBefore(date, sessionOpts);
+    if (next) setDate(next);
+  }, [selectedClassInfo, sessionOpts]);
+
   useEffect(() => {
     if (selectedClass && !visibleClasses.some((c) => c.id === selectedClass)) setSelectedClass("");
   }, [visibleClasses, selectedClass]);
+
 
   useEffect(() => {
     if (selectedClass) loadRoster();
