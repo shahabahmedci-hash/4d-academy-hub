@@ -24,6 +24,8 @@ import AttendanceMonthlyBreakdown from "@/components/student/AttendanceMonthlyBr
 import { useFinancialYearFreeze } from "@/hooks/useFinancialYearFreeze";
 import DateRangePicker from "@/components/shared/DateRangePicker";
 import { DateRange, isWithinRange } from "@/lib/dateRange";
+import { DAY_NAMES, countPersonSessions, isMarkableSessionDate, latestSessionOnOrBefore } from "@/lib/sessionDates";
+
 import {
   AttendanceRecord, AttendanceStatus, EligibleStudent, computeAttendanceStats,
   fetchClassAttendanceMap, fetchEligibleStudents, fetchStudentAttendance, saveStudentAttendance,
@@ -53,6 +55,16 @@ const StudentAttendanceHistoryView = ({ records, onDelete }: {
   const [classFilter, setClassFilter] = useState<string>(ALL);
   const [batchFilter, setBatchFilter] = useState<string>(ALL);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [dowByClass, setDowByClass] = useState<Record<string, number>>({});
+  const { isDateFrozen } = useFinancialYearFreeze();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from("classes").select("id, day_of_week");
+      setDowByClass(Object.fromEntries((data || []).map((c: any) => [c.id, c.day_of_week])));
+    })();
+  }, []);
 
   const classOptions = useMemo(
     () => [...new Set(records.map((r) => r.classes.class).filter(Boolean) as string[])].sort(),
@@ -82,6 +94,10 @@ const StudentAttendanceHistoryView = ({ records, onDelete }: {
   }), [records, classFilter, batchFilter, dateRange]);
 
   const stats = useMemo(() => computeAttendanceStats(chartRecords), [chartRecords]);
+  const sessionCount = useMemo(
+    () => countPersonSessions(chartRecords, dowByClass, dateRange, isDateFrozen),
+    [chartRecords, dowByClass, dateRange, isDateFrozen],
+  );
   const academicYear = chartRecords.length > 0 ? getAcademicYear(chartRecords[0].date) : "";
 
   return (
@@ -117,6 +133,23 @@ const StudentAttendanceHistoryView = ({ records, onDelete }: {
               setClassFilter(ALL); setBatchFilter(ALL); setDateRange(undefined); setActiveStatus(null);
             }}>Clear filters</Button>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-6 grid grid-cols-3 gap-4 text-center">
+          <div>
+            <div className="text-2xl font-bold">{sessionCount.scheduled}</div>
+            <p className="text-xs text-muted-foreground">Scheduled sessions</p>
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-emerald-600">{sessionCount.marked}</div>
+            <p className="text-xs text-muted-foreground">Marked</p>
+          </div>
+          <button className="text-left sm:text-center" onClick={() => navigate("/admin/attendance/coverage")}>
+            <div className="text-2xl font-bold text-destructive underline-offset-4 hover:underline">{sessionCount.unmarked}</div>
+            <p className="text-xs text-muted-foreground">Not marked</p>
+          </button>
         </CardContent>
       </Card>
 
@@ -239,9 +272,23 @@ const AdminAttendance = () => {
 
   const selectedClassInfo = useMemo(() => classes.find((c) => c.id === selectedClass), [classes, selectedClass]);
 
+  const sessionOpts = useMemo(() => ({
+    dayOfWeek: selectedClassInfo?.day_of_week ?? null,
+    isFrozen: isDateFrozen,
+  }), [selectedClassInfo, isDateFrozen]);
+
+  // Snap the date onto a real session day whenever the class changes.
+  useEffect(() => {
+    if (!selectedClassInfo) return;
+    if (isMarkableSessionDate(date, sessionOpts)) return;
+    const next = latestSessionOnOrBefore(date, sessionOpts);
+    if (next) setDate(next);
+  }, [selectedClassInfo, sessionOpts]);
+
   useEffect(() => {
     if (selectedClass && !visibleClasses.some((c) => c.id === selectedClass)) setSelectedClass("");
   }, [visibleClasses, selectedClass]);
+
 
   useEffect(() => {
     if (selectedClass) loadRoster();
@@ -412,10 +459,24 @@ const AdminAttendance = () => {
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar mode="single" selected={date} onSelect={(d) => d && setDate(d)} initialFocus className={cn("p-3 pointer-events-auto")} />
+                      <Calendar
+                        mode="single"
+                        selected={date}
+                        onSelect={(d) => d && setDate(d)}
+                        disabled={(d) => !isMarkableSessionDate(d, sessionOpts)}
+                        defaultMonth={date}
+                        initialFocus
+                        className={cn("p-3 pointer-events-auto")}
+                      />
                     </PopoverContent>
                   </Popover>
+                  {selectedClassInfo && (
+                    <p className="text-xs text-muted-foreground">
+                      Meets on {DAY_NAMES[selectedClassInfo.day_of_week]}s — other days are disabled
+                    </p>
+                  )}
                 </div>
+
               </CardContent>
             </Card>
 
