@@ -21,18 +21,19 @@ const DateRangePicker = ({ value, onChange, className, allowClear = true }: Prop
       </Button>
     </PopoverTrigger>
     <PopoverContent className="w-auto p-0" align="start">
-      <div className="flex flex-wrap gap-2 border-b p-3">
+      <div className="grid grid-cols-2 gap-2 border-b p-3 max-w-[20rem]">
         {RANGE_PRESETS.map((p) => (
-          <Button key={p.label} size="sm" variant="secondary" onClick={() => onChange(p.build())}>
+          <Button key={p.label} size="sm" variant="secondary" className="text-xs" onClick={() => onChange(p.build())}>
             {p.label}
           </Button>
         ))}
         {allowClear && (
-          <Button size="sm" variant="ghost" onClick={() => onChange(undefined)}>
+          <Button size="sm" variant="ghost" className="text-xs" onClick={() => onChange(undefined)}>
             Any date
           </Button>
         )}
       </div>
+
       <Calendar
         mode="range"
         selected={value}
