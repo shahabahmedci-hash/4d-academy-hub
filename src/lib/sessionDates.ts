@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import type { DateRange } from "@/lib/dateRange";
 
 export const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -36,8 +37,6 @@ export function latestSessionOnOrBefore(from: Date, opts: SessionDateOptions): D
   }
   return null;
 }
-
-import type { DateRange } from "@/lib/dateRange";
 
 export interface SessionCount {
   scheduled: number;
