@@ -24,6 +24,8 @@ import AttendanceMonthlyBreakdown from "@/components/student/AttendanceMonthlyBr
 import { useFinancialYearFreeze } from "@/hooks/useFinancialYearFreeze";
 import DateRangePicker from "@/components/shared/DateRangePicker";
 import { DateRange, isWithinRange } from "@/lib/dateRange";
+import { DAY_NAMES, isMarkableSessionDate, latestSessionOnOrBefore } from "@/lib/sessionDates";
+
 import {
   AttendanceRecord, AttendanceStatus, EligibleStudent, computeAttendanceStats,
   fetchClassAttendanceMap, fetchEligibleStudents, fetchStudentAttendance, saveStudentAttendance,
