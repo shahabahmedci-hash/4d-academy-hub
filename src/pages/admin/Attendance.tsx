@@ -412,10 +412,24 @@ const AdminAttendance = () => {
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar mode="single" selected={date} onSelect={(d) => d && setDate(d)} initialFocus className={cn("p-3 pointer-events-auto")} />
+                      <Calendar
+                        mode="single"
+                        selected={date}
+                        onSelect={(d) => d && setDate(d)}
+                        disabled={(d) => !isMarkableSessionDate(d, sessionOpts)}
+                        defaultMonth={date}
+                        initialFocus
+                        className={cn("p-3 pointer-events-auto")}
+                      />
                     </PopoverContent>
                   </Popover>
+                  {selectedClassInfo && (
+                    <p className="text-xs text-muted-foreground">
+                      Meets on {DAY_NAMES[selectedClassInfo.day_of_week]}s — other days are disabled
+                    </p>
+                  )}
                 </div>
+
               </CardContent>
             </Card>
 
