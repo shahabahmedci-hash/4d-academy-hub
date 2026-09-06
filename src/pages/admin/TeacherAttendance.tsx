@@ -21,6 +21,7 @@ import { ImportTeacherAttendanceDialog } from "@/components/admin/ImportTeacherA
 import { useFinancialYearFreeze } from "@/hooks/useFinancialYearFreeze";
 import DateRangePicker from "@/components/shared/DateRangePicker";
 import { DateRange, isWithinRange } from "@/lib/dateRange";
+import { DAY_NAMES, isMarkableSessionDate, latestSessionOnOrBefore } from "@/lib/sessionDates";
 import {
   AttendanceRecord, AttendanceStatus, computeAttendanceStats, fetchClassTeacherAttendanceMap,
   fetchTeacherAttendance, saveTeacherAttendance,
@@ -39,6 +40,7 @@ interface ClassRow {
   subject: string;
   class: string | null;
   section: string | null;
+  day_of_week: number;
 }
 
 const ALL = "__all__";
@@ -252,7 +254,7 @@ const TeacherAttendance = () => {
       if (error) { toast({ variant: "destructive", title: "Error", description: error.message }); return; }
       const ids = (tc || []).map((r) => r.class_id);
       if (ids.length === 0) return;
-      const { data: cls } = await supabase.from("classes").select("id, subject, class, section").in("id", ids).order("subject");
+      const { data: cls } = await supabase.from("classes").select("id, subject, class, section, day_of_week").in("id", ids).order("subject");
       setTeacherClasses(cls || []);
     })();
   }, [selectedTeacher]);
@@ -261,6 +263,23 @@ const TeacherAttendance = () => {
     () => [...new Set(teacherClasses.map((c) => c.section).filter(Boolean) as string[])].sort(), [teacherClasses]);
   const visibleClasses = useMemo(
     () => teacherClasses.filter((c) => batchFilter === ALL || c.section === batchFilter), [teacherClasses, batchFilter]);
+
+  const selectedClassInfo = useMemo(
+    () => teacherClasses.find((c) => c.id === selectedClass), [teacherClasses, selectedClass]);
+
+  const sessionOpts = useMemo(() => ({
+    dayOfWeek: selectedClassInfo?.day_of_week ?? null,
+    isFrozen: isDateFrozen,
+    minDate: teacherInfo?.joining_date ?? null,
+  }), [selectedClassInfo, isDateFrozen, teacherInfo]);
+
+  // Snap onto a real session day when the class or teacher changes.
+  useEffect(() => {
+    if (!selectedClassInfo) return;
+    if (isMarkableSessionDate(date, sessionOpts)) return;
+    const next = latestSessionOnOrBefore(date, sessionOpts);
+    if (next) setDate(next);
+  }, [selectedClassInfo, sessionOpts]);
 
   useEffect(() => {
     if (selectedClass && !visibleClasses.some((c) => c.id === selectedClass)) setSelectedClass("");
@@ -418,9 +437,22 @@ const TeacherAttendance = () => {
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar mode="single" selected={date} onSelect={(d) => d && setDate(d)} initialFocus className={cn("p-3 pointer-events-auto")} />
+                      <Calendar
+                        mode="single"
+                        selected={date}
+                        onSelect={(d) => d && setDate(d)}
+                        disabled={(d) => !isMarkableSessionDate(d, sessionOpts)}
+                        defaultMonth={date}
+                        initialFocus
+                        className={cn("p-3 pointer-events-auto")}
+                      />
                     </PopoverContent>
                   </Popover>
+                  {selectedClassInfo && (
+                    <p className="text-xs text-muted-foreground">
+                      Meets on {DAY_NAMES[selectedClassInfo.day_of_week]}s — other days are disabled
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
