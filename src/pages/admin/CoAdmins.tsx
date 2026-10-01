@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Search, ShieldCheck, UserMinus } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ArrowLeft, Search, ShieldCheck, Archive, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -28,8 +29,16 @@ const CoAdmins = () => {
   const [coAdmins, setCoAdmins] = useState<CoAdmin[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [isMainAdmin, setIsMainAdmin] = useState(false);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const init = async () => {
+      const { data: isAdmin } = await supabase.rpc("is_admin");
+      setIsMainAdmin(!!isAdmin);
+      await load();
+    };
+    init();
+  }, []);
 
   const load = async () => {
     setLoading(true);
@@ -55,16 +64,58 @@ const CoAdmins = () => {
     setLoading(false);
   };
 
-  const revoke = async (id: string) => {
-    const { error: profileError } = await supabase
-      .from("profiles").update({ role: "student", approved: false }).eq("id", id);
-    const { error: roleError } = await supabase
-      .from("user_roles").delete().eq("user_id", id).eq("role", "co_admin");
-    if (profileError || roleError) {
-      toast({ title: "Error", description: (profileError || roleError)?.message, variant: "destructive" });
-    } else {
-      toast({ title: "Revoked", description: "Co-admin access revoked" });
+  const changeRole = async (id: string, newRole: "student" | "teacher" | "admin") => {
+    try {
+      // Remove co-admin role
+      const { error: delError } = await supabase
+        .from("user_roles").delete().eq("user_id", id).eq("role", "co_admin");
+      if (delError) throw delError;
+
+      // Add admin role if switching to admin
+      if (newRole === "admin") {
+        const { error: insError } = await supabase
+          .from("user_roles").insert({ user_id: id, role: "admin" });
+        if (insError && insError.code !== "23505") throw insError;
+      }
+
+      // Update profile role (approved/profile_completed stay untouched)
+      const profileRole = newRole === "admin" ? "admin" : newRole;
+      const { error: profError } = await supabase
+        .from("profiles").update({ role: profileRole }).eq("id", id);
+      if (profError) throw profError;
+
+      // Create teacher record when switching to teacher
+      if (newRole === "teacher") {
+        const { error: teacherError } = await supabase.from("teachers").insert({
+          user_id: id,
+          joining_date: new Date().toISOString().split("T")[0],
+        });
+        if (teacherError && teacherError.code !== "23505") {
+          console.error("Error creating teacher record:", teacherError);
+        }
+      }
+
+      toast({ title: "Role Changed", description: `Co-admin is now a ${newRole}` });
       load();
+    } catch (error: any) {
+      console.error("Error changing role:", error);
+      toast({ title: "Error", description: error?.message || "Failed to change role", variant: "destructive" });
+    }
+  };
+
+  const archive = async (id: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase.rpc("archive_profile", {
+        _profile_id: id,
+        _archived_by: user?.id,
+      });
+      if (error) throw error;
+      toast({ title: "Archived", description: "Profile archived. The user can no longer sign in." });
+      load();
+    } catch (error: any) {
+      console.error("Error archiving profile:", error);
+      toast({ title: "Error", description: error?.message || "Failed to archive profile", variant: "destructive" });
     }
   };
 
@@ -120,7 +171,7 @@ const CoAdmins = () => {
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    {isMainAdmin && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -133,27 +184,48 @@ const CoAdmins = () => {
                           {c.approved ? "Active" : "Pending"}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="sm">
-                              <UserMinus className="h-4 w-4 mr-1" /> Revoke
+                      {isMainAdmin && (
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2 flex-wrap">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => navigate(`/admin/edit-profile/${c.id}`)}
+                            >
+                              <Pencil className="h-4 w-4 mr-1" /> Edit
                             </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Revoke co-admin access?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                {c.full_name} will be downgraded to student and require re-approval.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => revoke(c.id)}>Revoke</AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </TableCell>
+                            <Select onValueChange={(v) => changeRole(c.id, v as "student" | "teacher" | "admin")}>
+                              <SelectTrigger className="w-[150px] h-8">
+                                <SelectValue placeholder="Change role..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="student">Student</SelectItem>
+                                <SelectItem value="teacher">Teacher</SelectItem>
+                                <SelectItem value="admin">Admin</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm">
+                                  <Archive className="h-4 w-4 mr-1" /> Archive
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Archive co-admin?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    {c.full_name} will no longer be able to sign in and will appear under Archived Profiles, where they can be restored later.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => archive(c.id)}>Archive</AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
