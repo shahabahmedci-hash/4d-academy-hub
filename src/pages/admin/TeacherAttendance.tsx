@@ -21,7 +21,8 @@ import { ImportTeacherAttendanceDialog } from "@/components/admin/ImportTeacherA
 import { useFinancialYearFreeze } from "@/hooks/useFinancialYearFreeze";
 import DateRangePicker from "@/components/shared/DateRangePicker";
 import { DateRange, isWithinRange } from "@/lib/dateRange";
-import { DAY_NAMES, countPersonSessions, isMarkableSessionDate, latestSessionOnOrBefore } from "@/lib/sessionDates";
+import { countPersonSessions, isMarkableSessionDate, latestSessionOnOrBefore } from "@/lib/sessionDates";
+import { ScheduledSession, fetchScheduledSessions, useClassSessionDates } from "@/lib/scheduledSessions";
 import {
   AttendanceRecord, AttendanceStatus, computeAttendanceStats, fetchClassTeacherAttendanceMap,
   fetchTeacherAttendance, saveTeacherAttendance,
@@ -51,37 +52,61 @@ function getAcademicYear(dateStr: string): string {
   return `${startYear}-${String(startYear + 1).slice(2)}`;
 }
 
-const TeacherHistoryView = ({ records, onDelete }: {
+const TeacherHistoryView = ({ records, onDelete, teacherId }: {
   records: AttendanceRecord[];
   onDelete: (id: string) => void;
+  teacherId: string;
 }) => {
+  const [subjectFilter, setSubjectFilter] = useState<string>(ALL);
   const [activeStatus, setActiveStatus] = useState<string | null>(null);
   const [classFilter, setClassFilter] = useState<string>(ALL);
   const [batchFilter, setBatchFilter] = useState<string>(ALL);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
-  const [dowByClass, setDowByClass] = useState<Record<string, number>>({});
+  const [sessions, setSessions] = useState<ScheduledSession[]>([]);
+  const [classInfo, setClassInfo] = useState<Record<string, { subject: string; class: string | null; section: string | null }>>({});
+  const [joining, setJoining] = useState<string | null>(null);
   const { isDateFrozen } = useFinancialYearFreeze();
   const navigate = useNavigate();
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from("classes").select("id, day_of_week");
-      setDowByClass(Object.fromEntries((data || []).map((c: any) => [c.id, c.day_of_week])));
-    })();
-  }, []);
+      const [{ data: t }, { data: tc }] = await Promise.all([
+        supabase.from("teachers").select("joining_date").eq("id", teacherId).maybeSingle(),
+        supabase.from("teacher_classes").select("class_id").eq("teacher_id", teacherId),
+      ]);
+      const ids = (tc || []).map((r) => r.class_id);
+      setJoining(t?.joining_date ?? null);
+      if (!t || ids.length === 0) { setSessions([]); return; }
+      const { data: cls } = await supabase.from("classes").select("id, subject, class, section").in("id", ids);
+      setClassInfo(Object.fromEntries((cls || []).map((c) => [c.id, { subject: c.subject, class: c.class, section: c.section }])));
+      const all = await fetchScheduledSessions(t.joining_date, new Date());
+      setSessions(all.filter((s) => ids.includes(s.class_id)));
+    })().catch(() => setSessions([]));
+  }, [teacherId]);
 
-  const classOptions = useMemo(
+  const subjectOptions = useMemo(
     () => [...new Set(records.map((r) => r.classes.subject).filter(Boolean))].sort(), [records]);
+  const classOptions = useMemo(
+    () => [...new Set(records.map((r) => r.classes.class).filter(Boolean) as string[])].sort(), [records]);
   const batchOptions = useMemo(
-    () => [...new Set(records.filter((r) => classFilter === ALL || r.classes.subject === classFilter)
+    () => [...new Set(records.filter((r) => classFilter === ALL || r.classes.class === classFilter)
       .map((r) => r.classes.section).filter(Boolean) as string[])].sort(), [records, classFilter]);
 
+  const filteredSessions = useMemo(() => sessions.filter((s) => {
+    const c = classInfo[s.class_id];
+    if (subjectFilter !== ALL && c?.subject !== subjectFilter) return false;
+    if (classFilter !== ALL && c?.class !== classFilter) return false;
+    if (batchFilter !== ALL && c?.section !== batchFilter) return false;
+    return true;
+  }), [sessions, classInfo, subjectFilter, classFilter, batchFilter]);
+
   const chartRecords = useMemo(() => records.filter((r) => {
-    if (classFilter !== ALL && r.classes.subject !== classFilter) return false;
+    if (subjectFilter !== ALL && r.classes.subject !== subjectFilter) return false;
+    if (classFilter !== ALL && r.classes.class !== classFilter) return false;
     if (batchFilter !== ALL && r.classes.section !== batchFilter) return false;
     if (!isWithinRange(r.date, dateRange)) return false;
     return true;
-  }), [records, classFilter, batchFilter, dateRange]);
+  }), [records, subjectFilter, classFilter, batchFilter, dateRange]);
 
   const filtered = useMemo(
     () => (activeStatus ? chartRecords.filter((r) => r.status === activeStatus) : chartRecords),
@@ -89,8 +114,8 @@ const TeacherHistoryView = ({ records, onDelete }: {
 
   const stats = useMemo(() => computeAttendanceStats(chartRecords), [chartRecords]);
   const sessionCount = useMemo(
-    () => countPersonSessions(chartRecords, dowByClass, dateRange, isDateFrozen),
-    [chartRecords, dowByClass, dateRange, isDateFrozen],
+    () => countPersonSessions(chartRecords, filteredSessions, joining, null, dateRange, isDateFrozen),
+    [chartRecords, filteredSessions, joining, dateRange, isDateFrozen],
   );
   const academicYear = chartRecords.length > 0 ? getAcademicYear(chartRecords[0].date) : "";
 
@@ -98,12 +123,19 @@ const TeacherHistoryView = ({ records, onDelete }: {
     <div className="space-y-6">
       <Card>
         <CardHeader><CardTitle className="text-base">Filters</CardTitle></CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+            <SelectTrigger><SelectValue placeholder="Subject" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All subjects</SelectItem>
+              {subjectOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
           <Select value={classFilter} onValueChange={(v) => { setClassFilter(v); setBatchFilter(ALL); }}>
             <SelectTrigger><SelectValue placeholder="Class" /></SelectTrigger>
             <SelectContent>
               <SelectItem value={ALL}>All classes</SelectItem>
-              {classOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              {classOptions.map((c) => <SelectItem key={c} value={c}>Class {c}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={batchFilter} onValueChange={setBatchFilter}>
@@ -122,9 +154,9 @@ const TeacherHistoryView = ({ records, onDelete }: {
               <SelectItem value="absent">Absent</SelectItem>
             </SelectContent>
           </Select>
-          {(classFilter !== ALL || batchFilter !== ALL || dateRange || activeStatus) && (
+          {(subjectFilter !== ALL || classFilter !== ALL || batchFilter !== ALL || dateRange || activeStatus) && (
             <Button variant="ghost" size="sm" className="justify-self-start" onClick={() => {
-              setClassFilter(ALL); setBatchFilter(ALL); setDateRange(undefined); setActiveStatus(null);
+              setSubjectFilter(ALL); setClassFilter(ALL); setBatchFilter(ALL); setDateRange(undefined); setActiveStatus(null);
             }}>Clear filters</Button>
           )}
         </CardContent>
@@ -278,6 +310,7 @@ const TeacherAttendance = () => {
   useEffect(() => {
     setSelectedClass("");
     setBatchFilter(ALL);
+    setGradeFilter(ALL);
     setTeacherClasses([]);
     if (!selectedTeacher) return;
     (async () => {
@@ -290,23 +323,28 @@ const TeacherAttendance = () => {
     })();
   }, [selectedTeacher]);
 
+  const gradeOptions = useMemo(
+    () => [...new Set(teacherClasses.map((c) => c.class).filter(Boolean) as string[])].sort(), [teacherClasses]);
   const batchOptions = useMemo(
-    () => [...new Set(teacherClasses.map((c) => c.section).filter(Boolean) as string[])].sort(), [teacherClasses]);
+    () => [...new Set(teacherClasses.filter((c) => gradeFilter === ALL || c.class === gradeFilter)
+      .map((c) => c.section).filter(Boolean) as string[])].sort(), [teacherClasses, gradeFilter]);
   const visibleClasses = useMemo(
-    () => teacherClasses.filter((c) => batchFilter === ALL || c.section === batchFilter), [teacherClasses, batchFilter]);
+    () => teacherClasses.filter((c) => (gradeFilter === ALL || c.class === gradeFilter) && (batchFilter === ALL || c.section === batchFilter)),
+    [teacherClasses, gradeFilter, batchFilter]);
 
   const selectedClassInfo = useMemo(
     () => teacherClasses.find((c) => c.id === selectedClass), [teacherClasses, selectedClass]);
 
+  const sessionDates = useClassSessionDates(selectedClass || null);
   const sessionOpts = useMemo(() => ({
-    dayOfWeek: selectedClassInfo?.day_of_week ?? null,
+    sessionDates: sessionDates ?? new Set<string>(),
     isFrozen: isDateFrozen,
     minDate: teacherInfo?.joining_date ?? null,
-  }), [selectedClassInfo, isDateFrozen, teacherInfo]);
+  }), [sessionDates, isDateFrozen, teacherInfo]);
 
   // Snap onto a real session day when the class or teacher changes.
   useEffect(() => {
-    if (!selectedClassInfo) return;
+    if (!selectedClassInfo || !sessionDates) return;
     if (isMarkableSessionDate(date, sessionOpts)) return;
     const next = latestSessionOnOrBefore(date, sessionOpts);
     if (next) setDate(next);
@@ -416,7 +454,7 @@ const TeacherAttendance = () => {
 
       <main className="container mx-auto px-4 py-8 space-y-6">
         {filterTeacherId ? (
-          <TeacherHistoryView records={history} onDelete={handleDelete} />
+          <TeacherHistoryView teacherId={filterTeacherId!} records={history} onDelete={handleDelete} />
         ) : (
           <>
             <Card>
@@ -424,7 +462,7 @@ const TeacherAttendance = () => {
                 <CardTitle>Select Teacher, Class, Batch and Date</CardTitle>
                 <CardDescription>Only classes assigned to the selected teacher are listed</CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Teacher</label>
                   <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
@@ -433,6 +471,16 @@ const TeacherAttendance = () => {
                       {teachers.map((t) => (
                         <SelectItem key={t.id} value={t.id}>{t.full_name}{t.employee_id ? ` (${t.employee_id})` : ""}</SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Class</label>
+                  <Select value={gradeFilter} onValueChange={(v) => { setGradeFilter(v); setBatchFilter(ALL); }} disabled={!selectedTeacher}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>All classes</SelectItem>
+                      {gradeOptions.map((g) => <SelectItem key={g} value={g}>Class {g}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -447,7 +495,7 @@ const TeacherAttendance = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Class</label>
+                  <label className="text-sm font-medium">Subject session</label>
                   <Select value={selectedClass} onValueChange={setSelectedClass} disabled={!selectedTeacher}>
                     <SelectTrigger><SelectValue placeholder="Select a class" /></SelectTrigger>
                     <SelectContent>
@@ -481,7 +529,7 @@ const TeacherAttendance = () => {
                   </Popover>
                   {selectedClassInfo && (
                     <p className="text-xs text-muted-foreground">
-                      Meets on {DAY_NAMES[selectedClassInfo.day_of_week]}s — other days are disabled
+                      Only dates when this class actually met (per its schedule at that time) can be picked
                     </p>
                   )}
                 </div>
