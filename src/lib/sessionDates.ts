@@ -1,11 +1,12 @@
 import { format } from "date-fns";
 import type { DateRange } from "@/lib/dateRange";
+import type { ScheduledSession } from "@/lib/scheduledSessions";
 
 export const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export interface SessionDateOptions {
-  /** Weekday the class meets on (0 = Sunday). Undefined = no class selected yet. */
-  dayOfWeek?: number | null;
+  /** Real session dates (yyyy-MM-dd) for the selected class, from the schedule source of truth. */
+  sessionDates?: Set<string> | null;
   /** Returns true when the date belongs to a frozen financial year. */
   isFrozen?: (dateStr: string) => boolean;
   /** Earliest allowed date (yyyy-MM-dd), e.g. a teacher's joining date. */
@@ -18,7 +19,7 @@ export function isMarkableSessionDate(d: Date, opts: SessionDateOptions): boolea
   today.setHours(23, 59, 59, 999);
   if (d > today) return false;
   const dateStr = format(d, "yyyy-MM-dd");
-  if (opts.dayOfWeek != null && d.getDay() !== opts.dayOfWeek) return false;
+  if (opts.sessionDates && !opts.sessionDates.has(dateStr)) return false;
   if (opts.minDate && dateStr < opts.minDate) return false;
   if (opts.isFrozen?.(dateStr)) return false;
   return true;
@@ -45,50 +46,36 @@ export interface SessionCount {
 }
 
 /**
- * Counts scheduled class sessions for one person (student or teacher) against
- * the attendance rows actually saved, using each class's weekday.
- * Sessions before the person's first record for that class are ignored, since
- * the person was not attending it yet.
+ * Counts real scheduled sessions the person was eligible for against their saved
+ * attendance. Sessions come from the schedule source of truth — attendance is
+ * never used to infer that a session existed.
  */
 export function countPersonSessions(
   records: { date: string; class_id: string | null }[],
-  dayOfWeekByClass: Record<string, number>,
+  sessions: ScheduledSession[],
+  eligibleFrom: string | null,
+  eligibleTo: string | null,
   range?: DateRange,
   isFrozen?: (dateStr: string) => boolean,
 ): SessionCount {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const rangeTo = range?.to ?? range?.from;
-  const to = rangeTo && rangeTo < today ? new Date(rangeTo) : today;
-  to.setHours(0, 0, 0, 0);
-
-  const firstByClass: Record<string, string> = {};
-  const markedPairs = new Set<string>();
-  records.forEach((r) => {
-    if (!r.class_id) return;
-    markedPairs.add(`${r.class_id}|${r.date}`);
-    if (!firstByClass[r.class_id] || r.date < firstByClass[r.class_id]) firstByClass[r.class_id] = r.date;
-  });
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const fromStr = range?.from ? format(range.from, "yyyy-MM-dd") : null;
+  const toRaw = range?.to ?? range?.from;
+  const toStr = toRaw ? format(toRaw, "yyyy-MM-dd") : null;
+  const markedPairs = new Set(records.filter((r) => r.class_id).map((r) => `${r.class_id}|${r.date}`));
 
   let scheduled = 0;
   let marked = 0;
-  Object.entries(firstByClass).forEach(([classId, firstDate]) => {
-    const dow = dayOfWeekByClass[classId];
-    if (dow == null) return;
-    const rangeFrom = range?.from ? format(range.from, "yyyy-MM-dd") : firstDate;
-    const startStr = rangeFrom > firstDate ? rangeFrom : firstDate;
-    const d = new Date(`${startStr}T00:00:00`);
-    while (d <= to) {
-      if (d.getDay() === dow) {
-        const ds = format(d, "yyyy-MM-dd");
-        if (!isFrozen?.(ds)) {
-          scheduled++;
-          if (markedPairs.has(`${classId}|${ds}`)) marked++;
-        }
-      }
-      d.setDate(d.getDate() + 1);
-    }
+  sessions.forEach((s) => {
+    const ds = s.session_date;
+    if (ds > todayStr) return;
+    if (eligibleFrom && ds < eligibleFrom) return;
+    if (eligibleTo && ds > eligibleTo) return;
+    if (fromStr && ds < fromStr) return;
+    if (toStr && ds > toStr) return;
+    if (isFrozen?.(ds)) return;
+    scheduled++;
+    if (markedPairs.has(`${s.class_id}|${ds}`)) marked++;
   });
-
   return { scheduled, marked, unmarked: Math.max(scheduled - marked, 0) };
 }
