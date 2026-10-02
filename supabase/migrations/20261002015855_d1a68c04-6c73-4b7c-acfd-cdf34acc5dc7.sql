@@ -1,0 +1,4 @@
+REVOKE SELECT ON public.class_schedules, public.schedule_exceptions, public.holidays FROM anon;
+REVOKE EXECUTE ON FUNCTION public.get_scheduled_sessions(date, date, uuid), public.is_scheduled_session(uuid, date), public.change_class_schedule(uuid, date, jsonb), public.get_off_schedule_attendance() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_scheduled_sessions(date, date, uuid), public.is_scheduled_session(uuid, date), public.change_class_schedule(uuid, date, jsonb), public.get_off_schedule_attendance() TO authenticated;
+REVOKE EXECUTE ON FUNCTION public.class_has_attendance_between(uuid, date, date, int), public.validate_attendance_session(), public.protect_schedule_history(), public.sync_class_schedule_from_class() FROM PUBLIC, anon, authenticated;
