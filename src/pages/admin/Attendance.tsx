@@ -24,7 +24,8 @@ import AttendanceMonthlyBreakdown from "@/components/student/AttendanceMonthlyBr
 import { useFinancialYearFreeze } from "@/hooks/useFinancialYearFreeze";
 import DateRangePicker from "@/components/shared/DateRangePicker";
 import { DateRange, isWithinRange } from "@/lib/dateRange";
-import { DAY_NAMES, countPersonSessions, isMarkableSessionDate, latestSessionOnOrBefore } from "@/lib/sessionDates";
+import { countPersonSessions, isMarkableSessionDate, latestSessionOnOrBefore } from "@/lib/sessionDates";
+import { ScheduledSession, fetchScheduledSessions, useClassSessionDates } from "@/lib/scheduledSessions";
 
 import {
   AttendanceRecord, AttendanceStatus, EligibleStudent, computeAttendanceStats,
@@ -114,8 +115,8 @@ const StudentAttendanceHistoryView = ({ records, onDelete, studentId }: {
 
   const stats = useMemo(() => computeAttendanceStats(chartRecords), [chartRecords]);
   const sessionCount = useMemo(
-    () => countPersonSessions(chartRecords, dowByClass, dateRange, isDateFrozen),
-    [chartRecords, dowByClass, dateRange, isDateFrozen],
+    () => countPersonSessions(chartRecords, filteredSessions, eligibility.from, eligibility.to, dateRange, isDateFrozen),
+    [chartRecords, filteredSessions, eligibility, dateRange, isDateFrozen],
   );
   const academicYear = chartRecords.length > 0 ? getAcademicYear(chartRecords[0].date) : "";
 
@@ -291,14 +292,15 @@ const AdminAttendance = () => {
 
   const selectedClassInfo = useMemo(() => classes.find((c) => c.id === selectedClass), [classes, selectedClass]);
 
+  const sessionDates = useClassSessionDates(selectedClass || null);
   const sessionOpts = useMemo(() => ({
-    dayOfWeek: selectedClassInfo?.day_of_week ?? null,
+    sessionDates: sessionDates ?? new Set<string>(),
     isFrozen: isDateFrozen,
-  }), [selectedClassInfo, isDateFrozen]);
+  }), [sessionDates, isDateFrozen]);
 
   // Snap the date onto a real session day whenever the class changes.
   useEffect(() => {
-    if (!selectedClassInfo) return;
+    if (!selectedClassInfo || !sessionDates) return;
     if (isMarkableSessionDate(date, sessionOpts)) return;
     const next = latestSessionOnOrBefore(date, sessionOpts);
     if (next) setDate(next);
@@ -413,6 +415,7 @@ const AdminAttendance = () => {
       <main className="container mx-auto px-4 py-8">
         {filterStudentId ? (
           <StudentAttendanceHistoryView
+            studentId={filterStudentId!}
             records={history}
             onDelete={async (id: string) => {
               const rec = history.find((r) => r.id === id);
@@ -491,7 +494,7 @@ const AdminAttendance = () => {
                   </Popover>
                   {selectedClassInfo && (
                     <p className="text-xs text-muted-foreground">
-                      Meets on {DAY_NAMES[selectedClassInfo.day_of_week]}s — other days are disabled
+                      Only dates when this class actually met (per its schedule at that time) can be picked
                     </p>
                   )}
                 </div>
