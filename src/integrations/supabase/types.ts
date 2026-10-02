@@ -252,6 +252,53 @@ export type Database = {
           },
         ]
       }
+      class_schedules: {
+        Row: {
+          class_id: string
+          created_at: string
+          created_by: string | null
+          day_of_week: number
+          effective_from: string
+          effective_to: string | null
+          end_time: string
+          id: string
+          start_time: string
+          updated_at: string
+        }
+        Insert: {
+          class_id: string
+          created_at?: string
+          created_by?: string | null
+          day_of_week: number
+          effective_from: string
+          effective_to?: string | null
+          end_time: string
+          id?: string
+          start_time: string
+          updated_at?: string
+        }
+        Update: {
+          class_id?: string
+          created_at?: string
+          created_by?: string | null
+          day_of_week?: number
+          effective_from?: string
+          effective_to?: string | null
+          end_time?: string
+          id?: string
+          start_time?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_schedules_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       classes: {
         Row: {
           class: string | null
@@ -483,6 +530,30 @@ export type Database = {
         }
         Relationships: []
       }
+      holidays: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          date: string
+          id: string
+          label: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          date: string
+          id?: string
+          label: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          id?: string
+          label?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string
@@ -640,6 +711,53 @@ export type Database = {
             columns: ["teacher_id"]
             isOneToOne: false
             referencedRelation: "teachers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_exceptions: {
+        Row: {
+          class_id: string
+          created_at: string
+          created_by: string | null
+          date: string
+          id: string
+          new_date: string | null
+          new_end_time: string | null
+          new_start_time: string | null
+          note: string | null
+          type: string
+        }
+        Insert: {
+          class_id: string
+          created_at?: string
+          created_by?: string | null
+          date: string
+          id?: string
+          new_date?: string | null
+          new_end_time?: string | null
+          new_start_time?: string | null
+          note?: string | null
+          type: string
+        }
+        Update: {
+          class_id?: string
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          id?: string
+          new_date?: string | null
+          new_end_time?: string | null
+          new_start_time?: string | null
+          note?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_exceptions_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
             referencedColumns: ["id"]
           },
         ]
@@ -927,6 +1045,14 @@ export type Database = {
         Args: { _archived_by: string; _profile_id: string }
         Returns: undefined
       }
+      change_class_schedule: {
+        Args: { _class_id: string; _effective_from: string; _slots: Json }
+        Returns: undefined
+      }
+      class_has_attendance_between: {
+        Args: { _class_id: string; _dow: number; _from: string; _to: string }
+        Returns: boolean
+      }
       generate_employee_id: {
         Args: { first_name: string; joining_date: string; last_name: string }
         Returns: string
@@ -942,6 +1068,17 @@ export type Database = {
           pending_fees: number
           todays_classes: number
           total_students: number
+        }[]
+      }
+      get_off_schedule_attendance: {
+        Args: never
+        Returns: {
+          class_id: string
+          date: string
+          domain: string
+          person_id: string
+          record_id: string
+          status: string
         }[]
       }
       get_own_profile_protected_fields: {
@@ -965,6 +1102,17 @@ export type Database = {
           student_id: string
         }[]
       }
+      get_scheduled_sessions: {
+        Args: { _class_id?: string; _from: string; _to: string }
+        Returns: {
+          class_id: string
+          end_time: string
+          is_frozen: boolean
+          kind: string
+          session_date: string
+          start_time: string
+        }[]
+      }
       get_teacher_id: { Args: never; Returns: string }
       has_role: {
         Args: {
@@ -977,6 +1125,10 @@ export type Database = {
       is_approved: { Args: never; Returns: boolean }
       is_co_admin: { Args: never; Returns: boolean }
       is_date_frozen: { Args: { _date: string }; Returns: boolean }
+      is_scheduled_session: {
+        Args: { _class_id: string; _date: string }
+        Returns: boolean
+      }
       is_teacher: { Args: never; Returns: boolean }
       is_user_approved: { Args: { _user_id: string }; Returns: boolean }
       is_user_archived: { Args: { _user_id: string }; Returns: boolean }
