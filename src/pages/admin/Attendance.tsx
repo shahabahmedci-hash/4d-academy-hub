@@ -47,24 +47,43 @@ function getAcademicYear(dateStr: string): string {
   return `${startYear}-${String(startYear + 1).slice(2)}`;
 }
 
-const StudentAttendanceHistoryView = ({ records, onDelete }: {
+const StudentAttendanceHistoryView = ({ records, onDelete, studentId }: {
   records: AttendanceRecord[];
   onDelete: (id: string) => void;
+  studentId: string;
 }) => {
   const [activeStatus, setActiveStatus] = useState<string | null>(null);
   const [classFilter, setClassFilter] = useState<string>(ALL);
   const [batchFilter, setBatchFilter] = useState<string>(ALL);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
-  const [dowByClass, setDowByClass] = useState<Record<string, number>>({});
+  const [sessions, setSessions] = useState<ScheduledSession[]>([]);
+  const [classInfo, setClassInfo] = useState<Record<string, { class: string | null; section: string | null }>>({});
+  const [eligibility, setEligibility] = useState<{ from: string | null; to: string | null }>({ from: null, to: null });
   const { isDateFrozen } = useFinancialYearFreeze();
   const navigate = useNavigate();
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from("classes").select("id, day_of_week");
-      setDowByClass(Object.fromEntries((data || []).map((c: any) => [c.id, c.day_of_week])));
-    })();
-  }, []);
+      const [{ data: stu }, { data: enr }] = await Promise.all([
+        supabase.from("students").select("enrollment_date, exit_date").eq("id", studentId).maybeSingle(),
+        supabase.from("class_enrollments").select("class_id").eq("student_id", studentId),
+      ]);
+      const ids = (enr || []).map((e) => e.class_id);
+      setEligibility({ from: stu?.enrollment_date ?? null, to: stu?.exit_date ?? null });
+      if (!stu || ids.length === 0) { setSessions([]); return; }
+      const { data: cls } = await supabase.from("classes").select("id, class, section").in("id", ids);
+      setClassInfo(Object.fromEntries((cls || []).map((c) => [c.id, { class: c.class, section: c.section }])));
+      const all = await fetchScheduledSessions(stu.enrollment_date, new Date());
+      setSessions(all.filter((s) => ids.includes(s.class_id)));
+    })().catch(() => setSessions([]));
+  }, [studentId]);
+
+  const filteredSessions = useMemo(() => sessions.filter((s) => {
+    const c = classInfo[s.class_id];
+    if (classFilter !== ALL && c?.class !== classFilter) return false;
+    if (batchFilter !== ALL && c?.section !== batchFilter) return false;
+    return true;
+  }), [sessions, classInfo, classFilter, batchFilter]);
 
   const classOptions = useMemo(
     () => [...new Set(records.map((r) => r.classes.class).filter(Boolean) as string[])].sort(),
