@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { exportToCSV, formatDateForExport } from "@/lib/csvExport";
 import { DateRange } from "@/lib/dateRange";
 import { useFinancialYearFreeze } from "@/hooks/useFinancialYearFreeze";
+import OffScheduleReview from "@/components/admin/OffScheduleReview";
 import {
   CoverageDomain, CoverageSession, fetchStudentCoverage, fetchTeacherCoverage, summarizeCoverage,
 } from "@/hooks/useAttendanceCoverage";
@@ -220,6 +221,7 @@ const AttendanceCoverage = () => {
             )}
           </CardContent>
         </Card>
+        <OffScheduleReview />
       </main>
 
       <BottomNav role="admin" />
