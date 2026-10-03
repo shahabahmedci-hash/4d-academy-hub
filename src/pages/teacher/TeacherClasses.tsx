@@ -63,7 +63,7 @@ const TeacherClasses = () => {
               ) : (
                 classes.filter((c) => c.day_of_week === i).map((c) => (
                   <Card
-                    key={c.id}
+                    key={`${c.id}-${c.start_time}`}
                     className="cursor-pointer hover:bg-accent/40 transition-colors"
                     onClick={() => { setSelectedClassId(c.id); setDetailsOpen(true); }}
                   >
