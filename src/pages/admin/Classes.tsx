@@ -9,6 +9,8 @@ import { ArrowLeft, Clock, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AddClassDialog } from "@/components/admin/AddClassDialog";
 import { EditClassDialog } from "@/components/admin/EditClassDialog";
+import { ClassScheduleDialog, HolidaysDialog } from "@/components/admin/ClassScheduleDialog";
+import { fetchCurrentWeeklySlots } from "@/lib/scheduledSessions";
 
 interface Class {
   id: string;
@@ -29,6 +31,8 @@ const Classes = () => {
   const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
+  const [scheduleClass, setScheduleClass] = useState<Class | null>(null);
+  const [holidaysOpen, setHolidaysOpen] = useState(false);
 
   const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -66,7 +70,15 @@ const Classes = () => {
         .order("start_time", { ascending: true });
 
       if (error) throw error;
-      setClasses(data || []);
+      // Show each class under its *current* timetable slots (effective-dated source of truth).
+      const slots = await fetchCurrentWeeklySlots();
+      const expanded: Class[] = [];
+      (data || []).forEach((c) => {
+        const mine = slots.filter((s) => s.class_id === c.id);
+        if (mine.length === 0) expanded.push(c);
+        else mine.forEach((s) => expanded.push({ ...c, day_of_week: s.day_of_week, start_time: s.start_time, end_time: s.end_time }));
+      });
+      setClasses(expanded.sort((a, b) => a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time)));
     } catch (error) {
       console.error("Error loading classes:", error);
       toast({
@@ -112,6 +124,7 @@ const Classes = () => {
               <h1 className="text-2xl font-bold">Class Schedule</h1>
               <p className="text-sm text-muted-foreground">Manage class timetable</p>
             </div>
+            <Button variant="outline" size="sm" onClick={() => setHolidaysOpen(true)}>Holidays</Button>
             <AddClassDialog onClassAdded={loadClasses} />
           </div>
         </div>
@@ -127,7 +140,7 @@ const Classes = () => {
             <CardContent>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {dayClasses.map((cls) => (
-                  <Card key={cls.id} className="hover:shadow-md transition-shadow">
+                  <Card key={`${cls.id}-${cls.day_of_week}-${cls.start_time}`} className="hover:shadow-md transition-shadow">
                     <CardHeader>
                       <CardTitle className="text-lg">{cls.subject}</CardTitle>
                       {cls.teacher_name && (
@@ -162,6 +175,9 @@ const Classes = () => {
                       >
                         Edit Class
                       </Button>
+                      <Button variant="ghost" className="w-full" size="sm" onClick={() => setScheduleClass(cls)}>
+                        Schedule history & exceptions
+                      </Button>
                     </CardContent>
                   </Card>
                 ))}
@@ -188,6 +204,15 @@ const Classes = () => {
           onClassUpdated={loadClasses}
         />
       )}
+      {scheduleClass && (
+        <ClassScheduleDialog
+          classId={scheduleClass.id}
+          title={`${scheduleClass.subject}${scheduleClass.class ? ` — Class ${scheduleClass.class}` : ""}${scheduleClass.section ? ` (Batch ${scheduleClass.section})` : ""}`}
+          open={!!scheduleClass}
+          onOpenChange={(o) => !o && setScheduleClass(null)}
+        />
+      )}
+      <HolidaysDialog open={holidaysOpen} onOpenChange={setHolidaysOpen} />
       <BottomNav role="admin" />
       <div className="h-16 md:hidden" />
     </div>

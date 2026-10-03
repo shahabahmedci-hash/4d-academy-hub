@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchSessionsOn } from "@/lib/scheduledSessions";
 import BottomNav from "@/components/shared/BottomNav";
 import AdBanner from "@/components/shared/AdBanner";
 import PageSkeleton from "@/components/shared/PageSkeleton";
@@ -45,12 +46,12 @@ const TeacherDashboard = () => {
       let students = 0;
       let todays = 0;
       if (classIds.length > 0) {
-        const [{ count: sc }, { count: tdc }] = await Promise.all([
+        const [{ count: sc }, todaySessions] = await Promise.all([
           supabase.from("class_enrollments").select("id", { count: "exact", head: true }).in("class_id", classIds),
-          supabase.from("classes").select("id", { count: "exact", head: true }).in("id", classIds).eq("day_of_week", new Date().getDay()),
+          fetchSessionsOn(new Date(), classIds),
         ]);
         students = sc || 0;
-        todays = tdc || 0;
+        todays = todaySessions.length;
       }
       setStats({ classes: classIds.length, students, todaysClasses: todays });
     }

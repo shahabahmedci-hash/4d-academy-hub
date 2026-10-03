@@ -1,0 +1,1 @@
+- Class sessions come only from the effective-dated `class_schedules` via `get_scheduled_sessions` (src/lib/scheduledSessions.ts); never derive dates from `classes.day_of_week` or attendance — so schedule changes never rewrite history.
