@@ -107,6 +107,7 @@ export const EditClassDialog = ({ classData, open, onOpenChange, onClassUpdated 
     class: "",
     section: "",
   });
+  const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().slice(0, 10));
 
   useEffect(() => {
     if (open) {
@@ -180,9 +181,6 @@ export const EditClassDialog = ({ classData, open, onOpenChange, onClassUpdated 
         .from("classes")
         .update({
           subject: formData.subject.trim(),
-          day_of_week: parseInt(formData.day_of_week),
-          start_time: formData.start_time,
-          end_time: formData.end_time,
           room_location: formData.room_location.trim() || null,
           teacher_id: newTeacherId,
           teacher_name: teacherName,
@@ -192,6 +190,20 @@ export const EditClassDialog = ({ classData, open, onOpenChange, onClassUpdated 
         .eq("id", classData.id);
 
       if (error) throw error;
+
+      // Timetable changes never overwrite history: they start a new schedule period.
+      const scheduleChanged =
+        parseInt(formData.day_of_week) !== classData.day_of_week ||
+        formData.start_time.slice(0, 5) !== String(classData.start_time).slice(0, 5) ||
+        formData.end_time.slice(0, 5) !== String(classData.end_time).slice(0, 5);
+      if (scheduleChanged) {
+        const { error: schedErr } = await (supabase.rpc as any)("change_class_schedule", {
+          _class_id: classData.id,
+          _effective_from: effectiveFrom,
+          _slots: [{ day_of_week: parseInt(formData.day_of_week), start_time: formData.start_time, end_time: formData.end_time }],
+        });
+        if (schedErr) throw schedErr;
+      }
 
       // Update teacher_classes if teacher changed
       if (oldTeacherId !== newTeacherId) {
@@ -223,7 +235,7 @@ export const EditClassDialog = ({ classData, open, onOpenChange, onClassUpdated 
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to update class",
+        description: (error as any)?.message || "Failed to update class",
       });
     } finally {
       setLoading(false);
@@ -320,6 +332,14 @@ export const EditClassDialog = ({ classData, open, onOpenChange, onClassUpdated 
               />
               {errors.end_time && <p className="text-sm text-destructive">{errors.end_time}</p>}
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-effective">Day/time change applies from</Label>
+            <Input id="edit-effective" type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
+            <p className="text-xs text-muted-foreground">
+              Earlier dates keep their old schedule. Past dates that already have attendance can't be moved.
+            </p>
           </div>
 
           <div className="space-y-2">
