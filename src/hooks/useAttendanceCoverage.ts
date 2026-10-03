@@ -48,17 +48,6 @@ export function summarizeCoverage(sessions: CoverageSession[]): CoverageSummary 
   };
 }
 
-function eachDate(from: Date, to: Date): string[] {
-  const out: string[] = [];
-  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate());
-  const end = new Date(to.getFullYear(), to.getMonth(), to.getDate());
-  while (d <= end) {
-    out.push(format(d, "yyyy-MM-dd"));
-    d.setDate(d.getDate() + 1);
-  }
-  return out;
-}
-
 async function loadClasses(): Promise<ClassRow[]> {
   const { data, error } = await supabase
     .from("classes")
