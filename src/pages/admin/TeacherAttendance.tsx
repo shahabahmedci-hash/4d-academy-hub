@@ -244,6 +244,7 @@ const TeacherAttendance = () => {
   const [teacherClasses, setTeacherClasses] = useState<ClassRow[]>([]);
   const [selectedTeacher, setSelectedTeacher] = useState<string>("");
   const [batchFilter, setBatchFilter] = useState<string>(ALL);
+  const [gradeFilter, setGradeFilter] = useState<string>(ALL);
   const [selectedClass, setSelectedClass] = useState<string>("");
   const [date, setDate] = useState<Date>(deepDate ? new Date(`${deepDate}T00:00:00`) : new Date());
   const [status, setStatus] = useState<AttendanceStatus | null>(null);
