@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchCurrentWeeklySlots, expandWithSlots } from "@/lib/scheduledSessions";
 import BottomNav from "@/components/shared/BottomNav";
 import PageSkeleton from "@/components/shared/PageSkeleton";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,7 +33,7 @@ const TeacherClasses = () => {
       const ids = (tc || []).map((c) => c.class_id);
       if (ids.length > 0) {
         const { data: cls } = await supabase.from("classes").select("*").in("id", ids).order("start_time");
-        setClasses(cls || []);
+        setClasses(expandWithSlots(cls || [], await fetchCurrentWeeklySlots(ids)));
       }
     }
     setLoading(false);

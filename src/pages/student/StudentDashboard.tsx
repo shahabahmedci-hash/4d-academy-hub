@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchSessionsOn } from "@/lib/scheduledSessions";
 import BottomNav from "@/components/shared/BottomNav";
 import AdBanner from "@/components/shared/AdBanner";
 import PageSkeleton from "@/components/shared/PageSkeleton";
@@ -73,13 +74,7 @@ const StudentDashboard = () => {
       const classIds = (enrollRes.data || []).map((e) => e.class_id);
       let todays = 0;
       if (classIds.length > 0) {
-        const dow = new Date().getDay();
-        const { count } = await supabase
-          .from("classes")
-          .select("id", { count: "exact", head: true })
-          .in("id", classIds)
-          .eq("day_of_week", dow);
-        todays = count || 0;
+        todays = (await fetchSessionsOn(new Date(), classIds)).length;
       }
 
       setStats({ pendingFees: feesRes.count || 0, attendanceRate: rate, todaysClasses: todays });

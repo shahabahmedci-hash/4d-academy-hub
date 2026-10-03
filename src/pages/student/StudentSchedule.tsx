@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchCurrentWeeklySlots, expandWithSlots } from "@/lib/scheduledSessions";
 import BottomNav from "@/components/shared/BottomNav";
 import PageSkeleton from "@/components/shared/PageSkeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,7 +67,9 @@ const StudentSchedule = () => {
     const [a, b] = await Promise.all([byClassSection, byEnroll]);
     const merged = new Map<string, Cls>();
     [...(a.data || []), ...(b.data || [])].forEach((c: any) => merged.set(c.id, c));
-    setClasses(Array.from(merged.values()).sort((x, y) => (x.start_time || "").localeCompare(y.start_time || "")));
+    const list = Array.from(merged.values());
+    const slots = await fetchCurrentWeeklySlots(list.map((c) => c.id));
+    setClasses(expandWithSlots(list, slots).sort((x, y) => (x.start_time || "").localeCompare(y.start_time || "")));
     setLoading(false);
   };
 
@@ -98,7 +101,7 @@ const StudentSchedule = () => {
                 {todays.length === 0 ? (
                   <Card><CardContent className="py-12 text-center text-muted-foreground">No classes.</CardContent></Card>
                 ) : todays.map((c) => (
-                  <Card key={c.id}>
+                  <Card key={`${c.id}-${c.start_time}`}>
                     <CardHeader className="pb-2">
                       <CardTitle className="text-base">{c.subject}</CardTitle>
                       {c.teacher_name && <p className="text-sm text-muted-foreground">{c.teacher_name}</p>}

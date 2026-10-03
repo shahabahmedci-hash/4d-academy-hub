@@ -62,3 +62,14 @@ export async function fetchCurrentWeeklySlots(classIds?: string[]): Promise<Week
   if (error) throw error;
   return ((data || []) as any[]).filter((s) => !s.effective_to || s.effective_to >= today);
 }
+
+/** Replace each class's legacy weekday/time with its current effective slots. */
+export function expandWithSlots<T extends { id: string; day_of_week: number; start_time: string; end_time: string }>(classes: T[], slots: WeeklySlot[]): T[] {
+  const out: T[] = [];
+  classes.forEach((c) => {
+    const mine = slots.filter((s) => s.class_id === c.id);
+    if (mine.length === 0) out.push(c);
+    else mine.forEach((s) => out.push({ ...c, day_of_week: s.day_of_week, start_time: s.start_time, end_time: s.end_time }));
+  });
+  return out;
+}
