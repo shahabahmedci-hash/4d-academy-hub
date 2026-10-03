@@ -1,10 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
+import { fetchScheduledSessions, ScheduledSession } from "@/lib/scheduledSessions";
 
 /**
  * Attendance coverage: which scheduled class sessions have been marked and
  * which are still missing. A "session" is a class occurring on a date whose
- * weekday matches the class `day_of_week`.
+ * real scheduled session from the effective-dated schedule (get_scheduled_sessions).
  */
 
 export type CoverageDomain = "students" | "teachers";
@@ -35,7 +36,6 @@ interface ClassRow {
   subject: string;
   class: string | null;
   section: string | null;
-  day_of_week: number;
 }
 
 export function summarizeCoverage(sessions: CoverageSession[]): CoverageSummary {
@@ -62,7 +62,7 @@ function eachDate(from: Date, to: Date): string[] {
 async function loadClasses(): Promise<ClassRow[]> {
   const { data, error } = await supabase
     .from("classes")
-    .select("id, subject, class, section, day_of_week")
+    .select("id, subject, class, section")
     .order("subject");
   if (error) throw error;
   return data || [];
@@ -80,8 +80,9 @@ export async function fetchStudentCoverage(from: Date, to: Date): Promise<Covera
   const fromStr = format(from, "yyyy-MM-dd");
   const toStr = format(to, "yyyy-MM-dd");
 
-  const [classes, enrollRes, studentRes, attRes] = await Promise.all([
+  const [classes, sched, enrollRes, studentRes, attRes] = await Promise.all([
     loadClasses(),
+    fetchScheduledSessions(from, to),
     supabase.from("class_enrollments").select("class_id, student_id"),
     supabase.from("students").select("id, user_id, enrollment_date, exit_date"),
     supabase.from("attendance").select("class_id, date, student_id").gte("date", fromStr).lte("date", toStr),
@@ -112,7 +113,7 @@ export async function fetchStudentCoverage(from: Date, to: Date): Promise<Covera
     markedCount.set(k, (markedCount.get(k) || 0) + 1);
   });
 
-  return buildSessions(classes, from, to, (classId, dateStr) => {
+  return buildSessions(classes, sched, (classId, dateStr) => {
     const members = byClass.get(classId) || [];
     return members.filter((m) => m.enrollment_date <= dateStr && (!m.exit_date || m.exit_date >= dateStr)).length;
   }, markedCount);
@@ -123,8 +124,9 @@ export async function fetchTeacherCoverage(from: Date, to: Date): Promise<Covera
   const fromStr = format(from, "yyyy-MM-dd");
   const toStr = format(to, "yyyy-MM-dd");
 
-  const [classes, assignRes, teacherRes, attRes] = await Promise.all([
+  const [classes, sched, assignRes, teacherRes, attRes] = await Promise.all([
     loadClasses(),
+    fetchScheduledSessions(from, to),
     supabase.from("teacher_classes").select("class_id, teacher_id"),
     supabase.from("teachers").select("id, user_id, joining_date"),
     supabase.from("teacher_attendance").select("class_id, date, teacher_id").gte("date", fromStr).lte("date", toStr),
@@ -155,7 +157,7 @@ export async function fetchTeacherCoverage(from: Date, to: Date): Promise<Covera
     markedCount.set(k, (markedCount.get(k) || 0) + 1);
   });
 
-  return buildSessions(classes, from, to, (classId, dateStr) => {
+  return buildSessions(classes, sched, (classId, dateStr) => {
     const members = byClass.get(classId) || [];
     return members.filter((m) => m.joining_date <= dateStr).length;
   }, markedCount);
@@ -163,20 +165,20 @@ export async function fetchTeacherCoverage(from: Date, to: Date): Promise<Covera
 
 function buildSessions(
   classes: ClassRow[],
-  from: Date,
-  to: Date,
+  sched: ScheduledSession[],
   expectedFor: (classId: string, dateStr: string) => number,
   markedCount: Map<string, number>,
 ): CoverageSession[] {
-  const dates = eachDate(from, to);
   const todayStr = format(new Date(), "yyyy-MM-dd");
   const sessions: CoverageSession[] = [];
+  const classMap = new Map(classes.map((c) => [c.id, c]));
 
-  classes.forEach((c) => {
-    dates.forEach((dateStr) => {
+  sched.forEach((ss) => {
+    const c = classMap.get(ss.class_id);
+    if (!c) return;
+    const dateStr = ss.session_date;
+    {
       if (dateStr > todayStr) return;
-      const weekday = new Date(`${dateStr}T00:00:00`).getDay();
-      if (weekday !== c.day_of_week) return;
       const expected = expectedFor(c.id, dateStr);
       if (expected === 0) return;
       const marked = Math.min(markedCount.get(`${c.id}|${dateStr}`) || 0, expected);
@@ -192,7 +194,7 @@ function buildSessions(
         marked,
         state,
       });
-    });
+    }
   });
 
   // Oldest gaps first, complete sessions last.
