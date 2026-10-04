@@ -1,6 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { format } from "date-fns";
-import { fetchScheduledSessions, ScheduledSession } from "@/lib/scheduledSessions";
+import { fetchSessionAttendanceStatus } from "@/lib/scheduledSessions";
 
 /**
  * Attendance coverage: which scheduled class sessions have been marked and
@@ -57,139 +56,33 @@ async function loadClasses(): Promise<ClassRow[]> {
   return data || [];
 }
 
-async function archivedProfileIds(userIds: string[]): Promise<Set<string>> {
-  const ids = [...new Set(userIds.filter(Boolean))];
-  if (ids.length === 0) return new Set();
-  const { data } = await supabase.from("profiles").select("id, archived").in("id", ids);
-  return new Set((data || []).filter((p) => p.archived).map((p) => p.id));
-}
-
-/** Student-side coverage over a date range. */
-export async function fetchStudentCoverage(from: Date, to: Date): Promise<CoverageSession[]> {
-  const fromStr = format(from, "yyyy-MM-dd");
-  const toStr = format(to, "yyyy-MM-dd");
-
-  const [classes, sched, enrollRes, studentRes, attRes] = await Promise.all([
-    loadClasses(),
-    fetchScheduledSessions(from, to),
-    supabase.from("class_enrollments").select("class_id, student_id"),
-    supabase.from("students").select("id, user_id, enrollment_date, exit_date"),
-    supabase.from("attendance").select("class_id, date, student_id").gte("date", fromStr).lte("date", toStr),
-  ]);
-  if (enrollRes.error) throw enrollRes.error;
-  if (studentRes.error) throw studentRes.error;
-  if (attRes.error) throw attRes.error;
-
-  const archived = await archivedProfileIds((studentRes.data || []).map((s) => s.user_id).filter(Boolean) as string[]);
-  const studentMap = new Map(
-    (studentRes.data || [])
-      .filter((s) => !(s.user_id && archived.has(s.user_id)))
-      .map((s) => [s.id, s]),
-  );
-
-  const byClass = new Map<string, { enrollment_date: string; exit_date: string | null }[]>();
-  (enrollRes.data || []).forEach((e) => {
-    const s = studentMap.get(e.student_id);
-    if (!s) return;
-    const list = byClass.get(e.class_id) || [];
-    list.push({ enrollment_date: s.enrollment_date, exit_date: s.exit_date });
-    byClass.set(e.class_id, list);
-  });
-
-  const markedCount = new Map<string, number>();
-  (attRes.data || []).forEach((r) => {
-    const k = `${r.class_id}|${r.date}`;
-    markedCount.set(k, (markedCount.get(k) || 0) + 1);
-  });
-
-  return buildSessions(classes, sched, (classId, dateStr) => {
-    const members = byClass.get(classId) || [];
-    return members.filter((m) => m.enrollment_date <= dateStr && (!m.exit_date || m.exit_date >= dateStr)).length;
-  }, markedCount);
-}
-
-/** Teacher-side coverage over a date range. */
-export async function fetchTeacherCoverage(from: Date, to: Date): Promise<CoverageSession[]> {
-  const fromStr = format(from, "yyyy-MM-dd");
-  const toStr = format(to, "yyyy-MM-dd");
-
-  const [classes, sched, assignRes, teacherRes, attRes] = await Promise.all([
-    loadClasses(),
-    fetchScheduledSessions(from, to),
-    supabase.from("teacher_classes").select("class_id, teacher_id"),
-    supabase.from("teachers").select("id, user_id, joining_date"),
-    supabase.from("teacher_attendance").select("class_id, date, teacher_id").gte("date", fromStr).lte("date", toStr),
-  ]);
-  if (assignRes.error) throw assignRes.error;
-  if (teacherRes.error) throw teacherRes.error;
-  if (attRes.error) throw attRes.error;
-
-  const archived = await archivedProfileIds((teacherRes.data || []).map((t) => t.user_id).filter(Boolean) as string[]);
-  const teacherMap = new Map(
-    (teacherRes.data || [])
-      .filter((t) => !(t.user_id && archived.has(t.user_id)))
-      .map((t) => [t.id, t]),
-  );
-
-  const byClass = new Map<string, { joining_date: string }[]>();
-  (assignRes.data || []).forEach((a) => {
-    const t = teacherMap.get(a.teacher_id);
-    if (!t) return;
-    const list = byClass.get(a.class_id) || [];
-    list.push({ joining_date: t.joining_date });
-    byClass.set(a.class_id, list);
-  });
-
-  const markedCount = new Map<string, number>();
-  (attRes.data || []).forEach((r) => {
-    const k = `${r.class_id}|${r.date}`;
-    markedCount.set(k, (markedCount.get(k) || 0) + 1);
-  });
-
-  return buildSessions(classes, sched, (classId, dateStr) => {
-    const members = byClass.get(classId) || [];
-    return members.filter((m) => m.joining_date <= dateStr).length;
-  }, markedCount);
-}
-
-function buildSessions(
-  classes: ClassRow[],
-  sched: ScheduledSession[],
-  expectedFor: (classId: string, dateStr: string) => number,
-  markedCount: Map<string, number>,
-): CoverageSession[] {
-  const todayStr = format(new Date(), "yyyy-MM-dd");
-  const sessions: CoverageSession[] = [];
+async function coverageFor(domain: CoverageDomain, from: Date, to: Date): Promise<CoverageSession[]> {
+  const [classes, rows] = await Promise.all([loadClasses(), fetchSessionAttendanceStatus(domain, from, to)]);
   const classMap = new Map(classes.map((c) => [c.id, c]));
-
-  sched.forEach((ss) => {
-    const c = classMap.get(ss.class_id);
-    if (!c) return;
-    const dateStr = ss.session_date;
-    {
-      if (dateStr > todayStr) return;
-      const expected = expectedFor(c.id, dateStr);
-      if (expected === 0) return;
-      const marked = Math.min(markedCount.get(`${c.id}|${dateStr}`) || 0, expected);
-      const state: CoverageState = marked === 0 ? "missing" : marked >= expected ? "complete" : "partial";
-      sessions.push({
-        key: `${c.id}|${dateStr}`,
-        classId: c.id,
-        subject: c.subject,
-        class: c.class,
-        section: c.section,
-        date: dateStr,
-        expected,
-        marked,
-        state,
-      });
-    }
+  const agg = new Map<string, { classId: string; date: string; expected: number; marked: number }>();
+  rows.forEach((r) => {
+    const key = `${r.class_id}|${r.session_date}`;
+    const a = agg.get(key) || { classId: r.class_id, date: r.session_date, expected: 0, marked: 0 };
+    a.expected++;
+    if (r.marked) a.marked++;
+    agg.set(key, a);
   });
-
-  // Oldest gaps first, complete sessions last.
+  const sessions: CoverageSession[] = [];
+  agg.forEach((a, key) => {
+    const c = classMap.get(a.classId);
+    if (!c) return;
+    const state: CoverageState = a.marked === 0 ? "missing" : a.marked >= a.expected ? "complete" : "partial";
+    sessions.push({ key, classId: c.id, subject: c.subject, class: c.class, section: c.section, date: a.date, expected: a.expected, marked: a.marked, state });
+  });
   const order: Record<CoverageState, number> = { missing: 0, partial: 1, complete: 2 };
-  return sessions.sort((a, b) => order[a.state] - order[b.state] || a.date.localeCompare(b.date));
+  return sessions.sort((x, y) => order[x.state] - order[y.state] || x.date.localeCompare(y.date));
 }
+
+/** Student-side coverage over a date range (rule evaluated in the database). */
+export const fetchStudentCoverage = (from: Date, to: Date) => coverageFor("students", from, to);
+
+/** Teacher-side coverage over a date range (rule evaluated in the database). */
+export const fetchTeacherCoverage = (from: Date, to: Date) => coverageFor("teachers", from, to);
 
 /** Count of sessions with no attendance at all in the last N days (both domains). */
 export async function fetchUnmarkedCount(days = 30): Promise<number> {
