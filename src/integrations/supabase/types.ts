@@ -299,6 +299,82 @@ export type Database = {
           },
         ]
       }
+      class_sessions: {
+        Row: {
+          class_id: string
+          created_at: string
+          created_by: string | null
+          end_time: string
+          exception_id: string | null
+          id: string
+          kind: string
+          rescheduled_to_date: string | null
+          schedule_id: string | null
+          section: string | null
+          session_date: string
+          start_time: string
+          status: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          class_id: string
+          created_at?: string
+          created_by?: string | null
+          end_time: string
+          exception_id?: string | null
+          id?: string
+          kind?: string
+          rescheduled_to_date?: string | null
+          schedule_id?: string | null
+          section?: string | null
+          session_date: string
+          start_time: string
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          class_id?: string
+          created_at?: string
+          created_by?: string | null
+          end_time?: string
+          exception_id?: string | null
+          id?: string
+          kind?: string
+          rescheduled_to_date?: string | null
+          schedule_id?: string | null
+          section?: string | null
+          session_date?: string
+          start_time?: string
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_sessions_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_sessions_exception_id_fkey"
+            columns: ["exception_id"]
+            isOneToOne: false
+            referencedRelation: "schedule_exceptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_sessions_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "class_schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       classes: {
         Row: {
           class: string | null
@@ -1053,6 +1129,30 @@ export type Database = {
         Args: { _class_id: string; _dow: number; _from: string; _to: string }
         Returns: boolean
       }
+      compute_class_sessions: {
+        Args: { _class_id?: string; _from: string; _to: string }
+        Returns: {
+          class_id: string
+          end_time: string
+          exception_id: string
+          kind: string
+          rescheduled_to_date: string
+          schedule_id: string
+          session_date: string
+          start_time: string
+          status: string
+        }[]
+      }
+      extend_class_sessions: { Args: never; Returns: undefined }
+      generate_class_sessions: {
+        Args: {
+          _class_id: string
+          _from: string
+          _include_past?: boolean
+          _to: string
+        }
+        Returns: undefined
+      }
       generate_employee_id: {
         Args: { first_name: string; joining_date: string; last_name: string }
         Returns: string
@@ -1113,7 +1213,38 @@ export type Database = {
           start_time: string
         }[]
       }
+      get_session_attendance_status: {
+        Args: {
+          _class_id?: string
+          _domain: string
+          _from: string
+          _person_id?: string
+          _to: string
+        }
+        Returns: {
+          class_id: string
+          is_frozen: boolean
+          marked: boolean
+          person_id: string
+          session_date: string
+        }[]
+      }
       get_teacher_id: { Args: never; Returns: string }
+      get_unmarked_attendance: {
+        Args: {
+          _class_id?: string
+          _domain: string
+          _from: string
+          _person_id?: string
+          _to: string
+        }
+        Returns: {
+          class_id: string
+          is_frozen: boolean
+          person_id: string
+          session_date: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1133,6 +1264,10 @@ export type Database = {
       is_user_approved: { Args: { _user_id: string }; Returns: boolean }
       is_user_archived: { Args: { _user_id: string }; Returns: boolean }
       restore_profile: { Args: { _profile_id: string }; Returns: undefined }
+      session_has_attendance: {
+        Args: { _class_id: string; _date: string }
+        Returns: boolean
+      }
       teacher_has_class: { Args: { _class_id: string }; Returns: boolean }
       teacher_has_student: { Args: { _student_id: string }; Returns: boolean }
     }
