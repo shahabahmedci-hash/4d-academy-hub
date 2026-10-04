@@ -62,25 +62,19 @@ const TeacherHistoryView = ({ records, onDelete, teacherId }: {
   const [classFilter, setClassFilter] = useState<string>(ALL);
   const [batchFilter, setBatchFilter] = useState<string>(ALL);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
-  const [sessions, setSessions] = useState<ScheduledSession[]>([]);
+  const [sessions, setSessions] = useState<SessionAttendanceStatus[]>([]);
   const [classInfo, setClassInfo] = useState<Record<string, { subject: string; class: string | null; section: string | null }>>({});
-  const [joining, setJoining] = useState<string | null>(null);
-  const { isDateFrozen } = useFinancialYearFreeze();
   const navigate = useNavigate();
 
   useEffect(() => {
     (async () => {
-      const [{ data: t }, { data: tc }] = await Promise.all([
-        supabase.from("teachers").select("joining_date").eq("id", teacherId).maybeSingle(),
-        supabase.from("teacher_classes").select("class_id").eq("teacher_id", teacherId),
-      ]);
-      const ids = (tc || []).map((r) => r.class_id);
-      setJoining(t?.joining_date ?? null);
-      if (!t || ids.length === 0) { setSessions([]); return; }
-      const { data: cls } = await supabase.from("classes").select("id, subject, class, section").in("id", ids);
-      setClassInfo(Object.fromEntries((cls || []).map((c) => [c.id, { subject: c.subject, class: c.class, section: c.section }])));
-      const all = await fetchScheduledSessions(t.joining_date, new Date());
-      setSessions(all.filter((s) => ids.includes(s.class_id)));
+      const rows = await fetchSessionAttendanceStatus("teachers", "2000-01-01", new Date(), { personId: teacherId });
+      const ids = [...new Set(rows.map((r) => r.class_id))];
+      if (ids.length) {
+        const { data: cls } = await supabase.from("classes").select("id, subject, class, section").in("id", ids);
+        setClassInfo(Object.fromEntries((cls || []).map((c) => [c.id, { subject: c.subject, class: c.class, section: c.section }])));
+      }
+      setSessions(rows);
     })().catch(() => setSessions([]));
   }, [teacherId]);
 
