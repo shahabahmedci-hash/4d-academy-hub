@@ -1,3 +1,4 @@
+import { fetchCurrentWeeklySlots } from "@/lib/scheduledSessions";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -35,7 +36,9 @@ const ClassDetailsDialog = ({ classId, open, onOpenChange }: Props) => {
     const load = async () => {
       setLoading(true);
       setLoadError(false);
-      const { data: c, error: classError } = await supabase.from("classes").select("*").eq("id", classId).maybeSingle();
+      const { data: c0, error: classError } = await supabase.from("classes").select("*").eq("id", classId).maybeSingle();
+      const slot = c0 ? (await fetchCurrentWeeklySlots([classId]))[0] : undefined;
+      const c = c0 && slot ? { ...c0, day_of_week: slot.day_of_week, start_time: slot.start_time, end_time: slot.end_time } : c0;
       if (classError) {
         setLoadError(true);
         setLoading(false);
