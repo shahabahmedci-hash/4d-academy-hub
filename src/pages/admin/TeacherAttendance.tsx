@@ -22,7 +22,7 @@ import { useFinancialYearFreeze } from "@/hooks/useFinancialYearFreeze";
 import DateRangePicker from "@/components/shared/DateRangePicker";
 import { DateRange, isWithinRange } from "@/lib/dateRange";
 import { countPersonSessions, isMarkableSessionDate, latestSessionOnOrBefore } from "@/lib/sessionDates";
-import { ScheduledSession, fetchScheduledSessions, useClassSessionDates } from "@/lib/scheduledSessions";
+import { SessionAttendanceStatus, fetchSessionAttendanceStatus, useClassSessionDates } from "@/lib/scheduledSessions";
 import {
   AttendanceRecord, AttendanceStatus, computeAttendanceStats, fetchClassTeacherAttendanceMap,
   fetchTeacherAttendance, saveTeacherAttendance,
@@ -108,8 +108,8 @@ const TeacherHistoryView = ({ records, onDelete, teacherId }: {
 
   const stats = useMemo(() => computeAttendanceStats(chartRecords), [chartRecords]);
   const sessionCount = useMemo(
-    () => countPersonSessions(chartRecords, filteredSessions, joining, null, dateRange, isDateFrozen),
-    [chartRecords, filteredSessions, joining, dateRange, isDateFrozen],
+    () => countPersonSessions(filteredSessions, dateRange),
+    [filteredSessions, dateRange],
   );
   const academicYear = chartRecords.length > 0 ? getAcademicYear(chartRecords[0].date) : "";
 

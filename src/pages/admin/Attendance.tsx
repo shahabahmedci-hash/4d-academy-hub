@@ -25,7 +25,7 @@ import { useFinancialYearFreeze } from "@/hooks/useFinancialYearFreeze";
 import DateRangePicker from "@/components/shared/DateRangePicker";
 import { DateRange, isWithinRange } from "@/lib/dateRange";
 import { countPersonSessions, isMarkableSessionDate, latestSessionOnOrBefore } from "@/lib/sessionDates";
-import { ScheduledSession, fetchScheduledSessions, useClassSessionDates } from "@/lib/scheduledSessions";
+import { SessionAttendanceStatus, fetchSessionAttendanceStatus, useClassSessionDates } from "@/lib/scheduledSessions";
 
 import {
   AttendanceRecord, AttendanceStatus, EligibleStudent, computeAttendanceStats,
@@ -109,8 +109,8 @@ const StudentAttendanceHistoryView = ({ records, onDelete, studentId }: {
 
   const stats = useMemo(() => computeAttendanceStats(chartRecords), [chartRecords]);
   const sessionCount = useMemo(
-    () => countPersonSessions(chartRecords, filteredSessions, eligibility.from, eligibility.to, dateRange, isDateFrozen),
-    [chartRecords, filteredSessions, eligibility, dateRange, isDateFrozen],
+    () => countPersonSessions(filteredSessions, dateRange),
+    [filteredSessions, dateRange],
   );
   const academicYear = chartRecords.length > 0 ? getAcademicYear(chartRecords[0].date) : "";
 
