@@ -1,3 +1,4 @@
+import { fetchCurrentWeeklySlots, expandWithSlots } from "@/lib/scheduledSessions";
 import { useEffect, useState } from "react";
 import BottomNav from "@/components/shared/BottomNav";
 import PageSkeleton from "@/components/shared/PageSkeleton";
@@ -99,7 +100,8 @@ const TeacherDetails = () => {
           .select("*")
           .in("id", classIds)
           .order("day_of_week", { ascending: true });
-        setAssignedClasses(classes || []);
+        const slots = await fetchCurrentWeeklySlots(classIds);
+        setAssignedClasses(expandWithSlots((classes || []) as any[], slots).sort((a: any, b: any) => a.day_of_week - b.day_of_week));
       }
     } catch (err) {
       console.error("Error loading teacher details:", err);

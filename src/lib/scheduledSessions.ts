@@ -28,6 +28,33 @@ export async function fetchScheduledSessions(from: Date | string, to: Date | str
   return (data || []) as ScheduledSession[];
 }
 
+/**
+ * The one Unmarked rule, evaluated in the database: one row per real scheduled
+ * session × eligible person, with whether attendance exists. No session = no row.
+ */
+export interface SessionAttendanceStatus {
+  class_id: string;
+  session_date: string;
+  person_id: string;
+  marked: boolean;
+  is_frozen: boolean;
+}
+
+export async function fetchSessionAttendanceStatus(
+  domain: "students" | "teachers",
+  from: Date | string,
+  to: Date | string,
+  opts: { classId?: string | null; personId?: string | null } = {},
+): Promise<SessionAttendanceStatus[]> {
+  const f = typeof from === "string" ? from : toDateStr(from);
+  const t = typeof to === "string" ? to : toDateStr(to);
+  const { data, error } = await (supabase.rpc as any)("get_session_attendance_status", {
+    _from: f, _to: t, _domain: domain, _class_id: opts.classId ?? null, _person_id: opts.personId ?? null,
+  });
+  if (error) throw error;
+  return (data || []) as SessionAttendanceStatus[];
+}
+
 /** Session dates for one class over the past ~13 months (for marking calendars). */
 export function useClassSessionDates(classId?: string | null) {
   const [dates, setDates] = useState<Set<string> | null>(null);

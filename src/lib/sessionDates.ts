@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import type { DateRange } from "@/lib/dateRange";
-import type { ScheduledSession } from "@/lib/scheduledSessions";
+import type { SessionAttendanceStatus } from "@/lib/scheduledSessions";
 
 export const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -46,36 +46,23 @@ export interface SessionCount {
 }
 
 /**
- * Counts real scheduled sessions the person was eligible for against their saved
- * attendance. Sessions come from the schedule source of truth — attendance is
- * never used to infer that a session existed.
+ * Totals for the history strip. Rows come from `get_session_attendance_status`
+ * (session exists + person eligible), so eligibility and session existence are
+ * decided once in the database. This only applies the on-screen date range and
+ * skips frozen financial-year dates.
  */
-export function countPersonSessions(
-  records: { date: string; class_id: string | null }[],
-  sessions: ScheduledSession[],
-  eligibleFrom: string | null,
-  eligibleTo: string | null,
-  range?: DateRange,
-  isFrozen?: (dateStr: string) => boolean,
-): SessionCount {
-  const todayStr = format(new Date(), "yyyy-MM-dd");
+export function countPersonSessions(rows: SessionAttendanceStatus[], range?: DateRange): SessionCount {
   const fromStr = range?.from ? format(range.from, "yyyy-MM-dd") : null;
   const toRaw = range?.to ?? range?.from;
   const toStr = toRaw ? format(toRaw, "yyyy-MM-dd") : null;
-  const markedPairs = new Set(records.filter((r) => r.class_id).map((r) => `${r.class_id}|${r.date}`));
-
   let scheduled = 0;
   let marked = 0;
-  sessions.forEach((s) => {
-    const ds = s.session_date;
-    if (ds > todayStr) return;
-    if (eligibleFrom && ds < eligibleFrom) return;
-    if (eligibleTo && ds > eligibleTo) return;
-    if (fromStr && ds < fromStr) return;
-    if (toStr && ds > toStr) return;
-    if (isFrozen?.(ds)) return;
+  rows.forEach((r) => {
+    if (r.is_frozen) return;
+    if (fromStr && r.session_date < fromStr) return;
+    if (toStr && r.session_date > toStr) return;
     scheduled++;
-    if (markedPairs.has(`${s.class_id}|${ds}`)) marked++;
+    if (r.marked) marked++;
   });
-  return { scheduled, marked, unmarked: Math.max(scheduled - marked, 0) };
+  return { scheduled, marked, unmarked: scheduled - marked };
 }
