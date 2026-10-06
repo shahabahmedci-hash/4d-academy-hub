@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DAY_NAMES } from "@/lib/sessionDates";
+import { ScheduleImpactDialog, ImpactRow, Slot, previewScheduleChange } from "./ScheduleImpact";
 
 interface Period { id: string; day_of_week: number; start_time: string; end_time: string; effective_from: string; effective_to: string | null }
 interface Exception { id: string; date: string; type: string; new_date: string | null; new_start_time: string | null; new_end_time: string | null; note: string | null }
@@ -29,8 +30,32 @@ export function ClassScheduleDialog({ classId, title, open, onOpenChange }: {
   const [newStart, setNewStart] = useState("");
   const [newEnd, setNewEnd] = useState("");
   const [note, setNote] = useState("");
+  const [slots, setSlots] = useState<Slot[]>([{ day_of_week: 1, start_time: "", end_time: "" }]);
+  const [effFrom, setEffFrom] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [impact, setImpact] = useState<ImpactRow[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [flagged, setFlagged] = useState<{ session_date: string; status: string; start_time: string }[]>([]);
+
+  const checkChange = async () => {
+    if (slots.some((x) => !x.start_time || !x.end_time || x.end_time <= x.start_time)) {
+      toast({ variant: "destructive", title: "Each slot needs a start and a later end time" }); return;
+    }
+    try { setImpact(await previewScheduleChange(classId, effFrom, slots)); }
+    catch (err: any) { toast({ variant: "destructive", title: "Error", description: err.message }); }
+  };
+  const applyChange = async () => {
+    setBusy(true);
+    const { error } = await (supabase.rpc as any)("change_class_schedule", { _class_id: classId, _effective_from: effFrom, _slots: slots });
+    setBusy(false);
+    if (error) { toast({ variant: "destructive", title: "Error", description: error.message }); return; }
+    setImpact(null);
+    toast({ title: "Timetable updated", description: `Applies from ${fmt(effFrom)}` });
+    load();
+  };
 
   const load = async () => {
+    const { data: fl } = await db.from("class_sessions").select("session_date, status, start_time").eq("class_id", classId).not("reconciliation", "is", null).order("session_date");
+    setFlagged(fl || []);
     const [p, e] = await Promise.all([
       db.from("class_schedules").select("*").eq("class_id", classId).order("effective_from", { ascending: false }),
       db.from("schedule_exceptions").select("*").eq("class_id", classId).order("date", { ascending: false }),
@@ -78,7 +103,35 @@ export function ClassScheduleDialog({ classId, title, open, onOpenChange }: {
               {!p.effective_to && <Badge>Current</Badge>}
             </div>
           ))}
-          <p className="text-xs text-muted-foreground">To change the weekday or time, use Edit Class and pick the date it applies from.</p>
+        </section>
+
+        <section className="space-y-3 pt-2">
+          <h3 className="text-sm font-semibold">Change timetable from a date</h3>
+          <p className="text-xs text-muted-foreground">Pick any date — past, today or future. Earlier dates keep their schedule; you'll see the affected dates before anything changes.</p>
+          {slots.map((sl, i) => (
+            <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] items-end gap-2">
+              <Select value={String(sl.day_of_week)} onValueChange={(v) => setSlots(slots.map((x, j) => j === i ? { ...x, day_of_week: Number(v) } : x))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{DAY_NAMES.map((d, j) => <SelectItem key={d} value={String(j)}>{d}</SelectItem>)}</SelectContent>
+              </Select>
+              <Input type="time" value={sl.start_time} onChange={(e) => setSlots(slots.map((x, j) => j === i ? { ...x, start_time: e.target.value } : x))} />
+              <Input type="time" value={sl.end_time} onChange={(e) => setSlots(slots.map((x, j) => j === i ? { ...x, end_time: e.target.value } : x))} />
+              <Button variant="ghost" size="icon" aria-label="Remove slot" disabled={slots.length === 1} onClick={() => setSlots(slots.filter((_, j) => j !== i))}><Trash2 className="h-4 w-4" /></Button>
+            </div>
+          ))}
+          <div className="flex flex-wrap items-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => setSlots([...slots, { day_of_week: 1, start_time: "", end_time: "" }])}>Add weekday</Button>
+            <div className="space-y-1"><Label>Effective from</Label><Input type="date" value={effFrom} onChange={(e) => setEffFrom(e.target.value)} /></div>
+            <Button size="sm" onClick={checkChange} disabled={!effFrom}>Review change</Button>
+          </div>
+          {flagged.length > 0 && (
+            <div className="rounded-md border border-dashed p-3 text-sm">
+              <p className="font-medium">Kept because attendance exists ({flagged.length})</p>
+              <p className="text-xs text-muted-foreground mb-1">The current timetable no longer includes these sessions, but they were kept with their attendance.</p>
+              {flagged.map((f) => <div key={f.session_date + f.start_time}>{fmt(f.session_date)} · {f.start_time.slice(0, 5)}</div>)}
+            </div>
+          )}
+          <ScheduleImpactDialog rows={impact} open={!!impact} busy={busy} onCancel={() => setImpact(null)} onConfirm={applyChange} />
         </section>
 
         <section className="space-y-3 pt-2">
