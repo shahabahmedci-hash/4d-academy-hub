@@ -308,6 +308,7 @@ export type Database = {
           exception_id: string | null
           id: string
           kind: string
+          reconciliation: string | null
           rescheduled_to_date: string | null
           schedule_id: string | null
           section: string | null
@@ -325,6 +326,7 @@ export type Database = {
           exception_id?: string | null
           id?: string
           kind?: string
+          reconciliation?: string | null
           rescheduled_to_date?: string | null
           schedule_id?: string | null
           section?: string | null
@@ -342,6 +344,7 @@ export type Database = {
           exception_id?: string | null
           id?: string
           kind?: string
+          reconciliation?: string | null
           rescheduled_to_date?: string | null
           schedule_id?: string | null
           section?: string | null
@@ -1263,6 +1266,20 @@ export type Database = {
       is_teacher: { Args: never; Returns: boolean }
       is_user_approved: { Args: { _user_id: string }; Returns: boolean }
       is_user_archived: { Args: { _user_id: string }; Returns: boolean }
+      preview_schedule_change: {
+        Args: { _class_id: string; _effective_from: string; _slots: Json }
+        Returns: {
+          action: string
+          attendance_count: number
+          new_time: string
+          old_time: string
+          session_date: string
+        }[]
+      }
+      range_has_frozen: {
+        Args: { _from: string; _to: string }
+        Returns: boolean
+      }
       restore_profile: { Args: { _profile_id: string }; Returns: undefined }
       session_has_attendance: {
         Args: { _class_id: string; _date: string }
