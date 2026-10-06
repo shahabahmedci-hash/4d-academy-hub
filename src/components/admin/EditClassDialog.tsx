@@ -32,6 +32,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Trash2 } from "lucide-react";
 import { z } from "zod";
+import { ScheduleImpactDialog, ImpactRow, previewScheduleChange, needsConfirmation } from "./ScheduleImpact";
 
 interface Teacher {
   id: string;
@@ -108,6 +109,7 @@ export const EditClassDialog = ({ classData, open, onOpenChange, onClassUpdated 
     section: "",
   });
   const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().slice(0, 10));
+  const [impact, setImpact] = useState<ImpactRow[] | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -152,8 +154,8 @@ export const EditClassDialog = ({ classData, open, onOpenChange, onClassUpdated 
     }
   }, [classData, open]);
 
-  const handleUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleUpdate = async (e?: React.FormEvent, confirmed = false) => {
+    e?.preventDefault();
     setErrors({});
 
     const result = classSchema.safeParse(formData);
@@ -167,6 +169,22 @@ export const EditClassDialog = ({ classData, open, onOpenChange, onClassUpdated 
       setErrors(fieldErrors);
       return;
     }
+
+    const slot = { day_of_week: parseInt(formData.day_of_week), start_time: formData.start_time, end_time: formData.end_time };
+    const scheduleChanged =
+      slot.day_of_week !== classData.day_of_week ||
+      formData.start_time.slice(0, 5) !== String(classData.start_time).slice(0, 5) ||
+      formData.end_time.slice(0, 5) !== String(classData.end_time).slice(0, 5);
+    if (scheduleChanged && !confirmed) {
+      try {
+        const rows = await previewScheduleChange(classData.id, effectiveFrom, [slot]);
+        if (needsConfirmation(rows)) { setImpact(rows); return; }
+      } catch (err) {
+        toast({ variant: "destructive", title: "Error", description: (err as any)?.message || "Could not check the change" });
+        return;
+      }
+    }
+    setImpact(null);
 
     setLoading(true);
     try {
@@ -192,15 +210,11 @@ export const EditClassDialog = ({ classData, open, onOpenChange, onClassUpdated 
       if (error) throw error;
 
       // Timetable changes never overwrite history: they start a new schedule period.
-      const scheduleChanged =
-        parseInt(formData.day_of_week) !== classData.day_of_week ||
-        formData.start_time.slice(0, 5) !== String(classData.start_time).slice(0, 5) ||
-        formData.end_time.slice(0, 5) !== String(classData.end_time).slice(0, 5);
       if (scheduleChanged) {
         const { error: schedErr } = await (supabase.rpc as any)("change_class_schedule", {
           _class_id: classData.id,
           _effective_from: effectiveFrom,
-          _slots: [{ day_of_week: parseInt(formData.day_of_week), start_time: formData.start_time, end_time: formData.end_time }],
+          _slots: [slot],
         });
         if (schedErr) throw schedErr;
       }
@@ -338,7 +352,7 @@ export const EditClassDialog = ({ classData, open, onOpenChange, onClassUpdated 
             <Label htmlFor="edit-effective">Day/time change applies from</Label>
             <Input id="edit-effective" type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
             <p className="text-xs text-muted-foreground">
-              Earlier dates keep their old schedule. Past dates that already have attendance can't be moved.
+              Earlier dates keep their old schedule. You can pick a past date — you'll see the affected dates first, and attendance is never deleted.
             </p>
           </div>
 
@@ -429,6 +443,8 @@ export const EditClassDialog = ({ classData, open, onOpenChange, onClassUpdated 
             </div>
           </DialogFooter>
         </form>
+        <ScheduleImpactDialog rows={impact} open={!!impact} busy={loading}
+          onCancel={() => setImpact(null)} onConfirm={() => handleUpdate(undefined, true)} />
       </DialogContent>
     </Dialog>
   );
