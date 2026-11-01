@@ -17,6 +17,8 @@ import { ArrowLeft, Calendar as CalendarIcon, Check, X, Save, CheckCheck, Lock }
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useClassSessionDates } from "@/lib/scheduledSessions";
+import { isMarkableSessionDate } from "@/lib/sessionDates";
 import { useTeacherProfileGate } from "@/hooks/useTeacherProfileGate";
 import { useFinancialYearFreeze } from "@/hooks/useFinancialYearFreeze";
 import {
@@ -45,7 +47,9 @@ const TeacherAttendanceMark = () => {
   const [confirmAllOpen, setConfirmAllOpen] = useState(false);
 
   const dateStr = format(date, "yyyy-MM-dd");
-  const frozen = isDateFrozen(dateStr);
+  const sessionDates = useClassSessionDates(selectedClass || null);
+  const noSession = !!selectedClass && !!sessionDates && !sessionDates.has(dateStr);
+  const frozen = isDateFrozen(dateStr) || noSession;
 
   useEffect(() => { if (profileCompleted) loadClasses(); }, [profileCompleted]);
   useEffect(() => { if (selectedClass) loadStudents(); else { setStudents([]); setAttendance({}); } }, [selectedClass, dateStr]);
@@ -110,7 +114,7 @@ const TeacherAttendanceMark = () => {
 
   const save = async () => {
     if (frozen) {
-      toast({ title: "Frozen period", description: "This date is in a frozen financial year.", variant: "destructive" });
+      toast({ title: noSession ? "No class on this date" : "Frozen period", description: noSession ? "Pick a date when this class is scheduled." : "This date is in a frozen financial year.", variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -166,7 +170,7 @@ const TeacherAttendanceMark = () => {
             <Button variant="outline" className="w-full justify-start"><CalendarIcon className="mr-2 h-4 w-4" />{format(date, "PPP")}</Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">
-            <Calendar mode="single" selected={date} onSelect={(d) => d && setDate(d)} initialFocus className={cn("p-3 pointer-events-auto")} />
+            <Calendar mode="single" selected={date} onSelect={(d) => d && setDate(d)} disabled={(d) => !!selectedClass && !isMarkableSessionDate(d, { sessionDates, isFrozen: isDateFrozen })} initialFocus className={cn("p-3 pointer-events-auto")} />
           </PopoverContent>
         </Popover>
 
