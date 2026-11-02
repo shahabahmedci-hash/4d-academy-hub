@@ -1230,6 +1230,7 @@ export type Database = {
           marked: boolean
           person_id: string
           session_date: string
+          status: string
         }[]
       }
       get_teacher_id: { Args: never; Returns: string }
