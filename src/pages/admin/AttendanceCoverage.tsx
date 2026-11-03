@@ -167,11 +167,13 @@ const AttendanceCoverage = () => {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <Card><CardContent className="pt-6 text-center"><div className="text-3xl font-bold">{summary.expectedSessions}</div><p className="text-xs text-muted-foreground">Scheduled sessions</p></CardContent></Card>
-          <Card><CardContent className="pt-6 text-center"><div className="text-3xl font-bold text-destructive">{summary.missing}</div><p className="text-xs text-muted-foreground">Not marked</p></CardContent></Card>
-          <Card><CardContent className="pt-6 text-center"><div className="text-3xl font-bold text-amber-600">{summary.partial}</div><p className="text-xs text-muted-foreground">Partly marked</p></CardContent></Card>
-          <Card><CardContent className="pt-6 text-center"><div className="text-3xl font-bold text-emerald-600">{summary.complete}</div><p className="text-xs text-muted-foreground">Fully marked</p></CardContent></Card>
+          <Card><CardContent className="pt-6 text-center"><div className="text-3xl font-bold text-emerald-600">{summary.percentage}%</div><p className="text-xs text-muted-foreground">Marked</p></CardContent></Card>
+          <Card><CardContent className="pt-6 text-center"><div className="text-3xl font-bold text-emerald-600">{summary.present}</div><p className="text-xs text-muted-foreground">Present</p></CardContent></Card>
+          <Card><CardContent className="pt-6 text-center"><div className="text-3xl font-bold text-destructive">{summary.absent}</div><p className="text-xs text-muted-foreground">Absent</p></CardContent></Card>
+          <Card><CardContent className="pt-6 text-center"><div className="text-3xl font-bold">{summary.leave}</div><p className="text-xs text-muted-foreground">Leave</p></CardContent></Card>
+          <Card><CardContent className="pt-6 text-center"><div className="text-3xl font-bold text-destructive">{summary.unmarkedPeople}</div><p className="text-xs text-muted-foreground">Unmarked</p></CardContent></Card>
         </div>
 
         <Card>
