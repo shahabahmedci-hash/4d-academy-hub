@@ -46,12 +46,20 @@ interface ClassRow {
 }
 
 export function summarizeCoverage(sessions: CoverageSession[]): CoverageSummary {
+  const present = sessions.reduce((sum, s) => sum + s.present, 0);
+  const absent = sessions.reduce((sum, s) => sum + s.absent, 0);
+  const expected = sessions.reduce((sum, s) => sum + s.expected, 0);
+  const marked = sessions.reduce((sum, s) => sum + s.marked, 0);
   return {
     expectedSessions: sessions.length,
     complete: sessions.filter((s) => s.state === "complete").length,
     partial: sessions.filter((s) => s.state === "partial").length,
     missing: sessions.filter((s) => s.state === "missing").length,
-    unmarkedPeople: sessions.reduce((sum, s) => sum + (s.expected - s.marked), 0),
+    present,
+    absent,
+    leave: 0,
+    unmarkedPeople: expected - marked,
+    percentage: expected > 0 ? Math.round((marked / expected) * 100) : 0,
   };
 }
 
