@@ -1,0 +1,2 @@
+REVOKE EXECUTE ON FUNCTION public.get_session_attendance_status(date, date, text, uuid, uuid) FROM anon, PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_session_attendance_status(date, date, text, uuid, uuid) TO authenticated;
