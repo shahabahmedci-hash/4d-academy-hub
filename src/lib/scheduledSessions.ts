@@ -38,6 +38,8 @@ export interface SessionAttendanceStatus {
   person_id: string;
   marked: boolean;
   is_frozen: boolean;
+  /** "present" | "absent" when marked, null when unmarked. */
+  status: "present" | "absent" | null;
 }
 
 export async function fetchSessionAttendanceStatus(

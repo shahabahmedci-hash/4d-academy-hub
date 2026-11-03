@@ -19,6 +19,8 @@ export interface CoverageSession {
   date: string;
   expected: number;
   marked: number;
+  present: number;
+  absent: number;
   state: CoverageState;
 }
 
@@ -27,7 +29,13 @@ export interface CoverageSummary {
   complete: number;
   partial: number;
   missing: number;
+  present: number;
+  absent: number;
+  /** This app only records Present and Absent, so Leave is always 0 for now. */
+  leave: number;
   unmarkedPeople: number;
+  /** Share of expected person-sessions that have an attendance record. */
+  percentage: number;
 }
 
 interface ClassRow {
