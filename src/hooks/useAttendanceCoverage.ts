@@ -75,12 +75,14 @@ async function loadClasses(): Promise<ClassRow[]> {
 async function coverageFor(domain: CoverageDomain, from: Date, to: Date): Promise<CoverageSession[]> {
   const [classes, rows] = await Promise.all([loadClasses(), fetchSessionAttendanceStatus(domain, from, to)]);
   const classMap = new Map(classes.map((c) => [c.id, c]));
-  const agg = new Map<string, { classId: string; date: string; expected: number; marked: number }>();
+  const agg = new Map<string, { classId: string; date: string; expected: number; marked: number; present: number; absent: number }>();
   rows.forEach((r) => {
     const key = `${r.class_id}|${r.session_date}`;
-    const a = agg.get(key) || { classId: r.class_id, date: r.session_date, expected: 0, marked: 0 };
+    const a = agg.get(key) || { classId: r.class_id, date: r.session_date, expected: 0, marked: 0, present: 0, absent: 0 };
     a.expected++;
     if (r.marked) a.marked++;
+    if (r.status === "present") a.present++;
+    if (r.status === "absent") a.absent++;
     agg.set(key, a);
   });
   const sessions: CoverageSession[] = [];
@@ -88,7 +90,7 @@ async function coverageFor(domain: CoverageDomain, from: Date, to: Date): Promis
     const c = classMap.get(a.classId);
     if (!c) return;
     const state: CoverageState = a.marked === 0 ? "missing" : a.marked >= a.expected ? "complete" : "partial";
-    sessions.push({ key, classId: c.id, subject: c.subject, class: c.class, section: c.section, date: a.date, expected: a.expected, marked: a.marked, state });
+    sessions.push({ key, classId: c.id, subject: c.subject, class: c.class, section: c.section, date: a.date, expected: a.expected, marked: a.marked, present: a.present, absent: a.absent, state });
   });
   const order: Record<CoverageState, number> = { missing: 0, partial: 1, complete: 2 };
   return sessions.sort((x, y) => order[x.state] - order[y.state] || x.date.localeCompare(y.date));
