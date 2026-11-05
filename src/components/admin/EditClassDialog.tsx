@@ -438,6 +438,46 @@ export const EditClassDialog = ({ classData, open, onOpenChange, onClassUpdated 
             </div>
           </div>
 
+          <div className="space-y-2 rounded-md border border-dashed p-3">
+            <p className="text-sm font-medium">Stop this class</p>
+            <p className="text-xs text-muted-foreground">
+              Cancel all classes from a date onwards — nothing new is scheduled after that date. Past classes and all attendance are kept. Use Delete only to remove the class entirely.
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="flex-1 space-y-1">
+                <Label htmlFor="edit-stop-from">Cancel from</Label>
+                <Input
+                  id="edit-stop-from"
+                  type="date"
+                  value={stopFrom}
+                  onChange={(e) => setStopFrom(e.target.value)}
+                />
+              </div>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button type="button" variant="outline" disabled={stopping || !stopFrom}>
+                    <CalendarX className="h-4 w-4 mr-2" />
+                    Cancel future classes
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Cancel future classes?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      No classes will be scheduled from {stopFrom} onwards. Past classes and all attendance stay exactly as they are. You can start the class again later by changing the timetable from a new date.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Keep classes</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleStopFuture} disabled={stopping}>
+                      {stopping ? "Cancelling..." : "Cancel future classes"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
+
           <DialogFooter className="flex-col sm:flex-row gap-2">
             <AlertDialog>
               <AlertDialogTrigger asChild>
