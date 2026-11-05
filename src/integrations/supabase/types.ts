@@ -1286,6 +1286,10 @@ export type Database = {
         Args: { _class_id: string; _date: string }
         Returns: boolean
       }
+      stop_class_schedule: {
+        Args: { _class_id: string; _from: string }
+        Returns: undefined
+      }
       teacher_has_class: { Args: { _class_id: string }; Returns: boolean }
       teacher_has_student: { Args: { _student_id: string }; Returns: boolean }
     }

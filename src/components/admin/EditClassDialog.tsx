@@ -30,7 +30,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2 } from "lucide-react";
+import { CalendarX, Trash2 } from "lucide-react";
 import { z } from "zod";
 import { ScheduleImpactDialog, ImpactRow, previewScheduleChange, needsConfirmation } from "./ScheduleImpact";
 
@@ -109,6 +109,8 @@ export const EditClassDialog = ({ classData, open, onOpenChange, onClassUpdated 
     section: "",
   });
   const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().slice(0, 10));
+  const [stopFrom, setStopFrom] = useState(new Date().toISOString().slice(0, 10));
+  const [stopping, setStopping] = useState(false);
   const [impact, setImpact] = useState<ImpactRow[] | null>(null);
 
   useEffect(() => {
@@ -256,6 +258,32 @@ export const EditClassDialog = ({ classData, open, onOpenChange, onClassUpdated 
     }
   };
 
+  const handleStopFuture = async () => {
+    setStopping(true);
+    try {
+      const { error } = await (supabase.rpc as any)("stop_class_schedule", {
+        _class_id: classData.id,
+        _from: stopFrom,
+      });
+      if (error) throw error;
+      toast({
+        title: "Future classes cancelled",
+        description: `No classes will be scheduled from ${stopFrom} onwards. Past classes and attendance are untouched.`,
+      });
+      onOpenChange(false);
+      onClassUpdated();
+    } catch (error) {
+      console.error("Error cancelling future classes:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: (error as any)?.message || "Failed to cancel future classes",
+      });
+    } finally {
+      setStopping(false);
+    }
+  };
+
   const handleDelete = async () => {
     setDeleting(true);
     try {
@@ -286,7 +314,7 @@ export const EditClassDialog = ({ classData, open, onOpenChange, onClassUpdated 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Class</DialogTitle>
           <DialogDescription>
@@ -407,6 +435,46 @@ export const EditClassDialog = ({ classData, open, onOpenChange, onClassUpdated 
                 placeholder="e.g., A, XYZ"
               />
               {errors.section && <p className="text-sm text-destructive">{errors.section}</p>}
+            </div>
+          </div>
+
+          <div className="space-y-2 rounded-md border border-dashed p-3">
+            <p className="text-sm font-medium">Stop this class</p>
+            <p className="text-xs text-muted-foreground">
+              Cancel all classes from a date onwards — nothing new is scheduled after that date. Past classes and all attendance are kept. Use Delete only to remove the class entirely.
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="flex-1 space-y-1">
+                <Label htmlFor="edit-stop-from">Cancel from</Label>
+                <Input
+                  id="edit-stop-from"
+                  type="date"
+                  value={stopFrom}
+                  onChange={(e) => setStopFrom(e.target.value)}
+                />
+              </div>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button type="button" variant="outline" disabled={stopping || !stopFrom}>
+                    <CalendarX className="h-4 w-4 mr-2" />
+                    Cancel future classes
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Cancel future classes?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      No classes will be scheduled from {stopFrom} onwards. Past classes and all attendance stay exactly as they are. You can start the class again later by changing the timetable from a new date.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Keep classes</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleStopFuture} disabled={stopping}>
+                      {stopping ? "Cancelling..." : "Cancel future classes"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </div>
 
