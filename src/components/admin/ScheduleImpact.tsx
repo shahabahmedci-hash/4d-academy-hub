@@ -71,7 +71,7 @@ export function ScheduleImpactDialog({ rows, open, onCancel, onConfirm, busy }: 
         <AlertDialogFooter>
           <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
           <AlertDialogAction onClick={(e) => { e.preventDefault(); onConfirm(); }} disabled={busy}>
-            {busy ? "Applying..." : "Apply change"}
+            {busy ? "Saving..." : "Save change"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

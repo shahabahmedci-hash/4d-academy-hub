@@ -35,6 +35,7 @@ export function ClassScheduleDialog({ classId, title, open, onOpenChange }: {
   const [impact, setImpact] = useState<ImpactRow[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [flagged, setFlagged] = useState<{ session_date: string; status: string; start_time: string }[]>([]);
+  const [sessionDates, setSessionDates] = useState<string[]>([]);
 
   const checkChange = async () => {
     if (slots.some((x) => !x.start_time || !x.end_time || x.end_time <= x.start_time)) {
@@ -62,11 +63,17 @@ export function ClassScheduleDialog({ classId, title, open, onOpenChange }: {
     ]);
     setPeriods(p.data || []);
     setExceptions(e.data || []);
+    const { data: sd } = await db.from("class_sessions").select("session_date").eq("class_id", classId).eq("status", "scheduled").order("session_date");
+    setSessionDates([...new Set(((sd || []) as { session_date: string }[]).map((r) => r.session_date))]);
   };
   useEffect(() => { if (open) load(); }, [open, classId]);
 
   const add = async () => {
     if (!date) return;
+    if (type !== "extra" && !sessionDates.includes(date)) {
+      toast({ variant: "destructive", title: "Pick a scheduled date", description: "This class has no scheduled session on that date." });
+      return;
+    }
     const row: any = { class_id: classId, date, type, note: note || null };
     if (type === "rescheduled") {
       if (!newDate) { toast({ variant: "destructive", title: "Pick the new date" }); return; }
@@ -122,7 +129,7 @@ export function ClassScheduleDialog({ classId, title, open, onOpenChange }: {
           <div className="flex flex-wrap items-end gap-2">
             <Button variant="outline" size="sm" onClick={() => setSlots([...slots, { day_of_week: 1, start_time: "", end_time: "" }])}>Add weekday</Button>
             <div className="space-y-1"><Label>Effective from</Label><Input type="date" value={effFrom} onChange={(e) => setEffFrom(e.target.value)} /></div>
-            <Button size="sm" onClick={checkChange} disabled={!effFrom}>Review change</Button>
+            <Button size="sm" onClick={checkChange} disabled={!effFrom}>Review &amp; save change</Button>
           </div>
           {flagged.length > 0 && (
             <div className="rounded-md border border-dashed p-3 text-sm">
@@ -136,6 +143,7 @@ export function ClassScheduleDialog({ classId, title, open, onOpenChange }: {
 
         <section className="space-y-3 pt-2">
           <h3 className="text-sm font-semibold">Cancelled, rescheduled & extra sessions</h3>
+          <p className="text-xs text-muted-foreground">Cancel or reschedule must pick a date this class actually meets. Extra sessions can be added on any date.</p>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label>Type</Label>
@@ -148,10 +156,26 @@ export function ClassScheduleDialog({ classId, title, open, onOpenChange }: {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1">
-              <Label>{type === "extra" ? "Session date" : "Original session date"}</Label>
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
+            {type === "extra" ? (
+              <div className="space-y-1">
+                <Label>Session date</Label>
+                <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <Label>Original session date</Label>
+                {sessionDates.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">This class has no scheduled sessions to cancel or reschedule. Add an extra session instead.</p>
+                ) : (
+                  <Select value={date} onValueChange={setDate}>
+                    <SelectTrigger><SelectValue placeholder="Pick a scheduled date" /></SelectTrigger>
+                    <SelectContent className="max-h-60">
+                      {sessionDates.map((d) => <SelectItem key={d} value={d}>{fmt(d)}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
             {type === "rescheduled" && (
               <div className="space-y-1">
                 <Label>Moved to</Label>
@@ -169,7 +193,9 @@ export function ClassScheduleDialog({ classId, title, open, onOpenChange }: {
               <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional reason" />
             </div>
           </div>
-          <Button size="sm" onClick={add} disabled={!date}>Add</Button>
+          <Button size="sm" onClick={add} disabled={!date || (type !== "extra" && !sessionDates.includes(date))}>
+            {type === "extra" ? "Add extra session" : "Save"}
+          </Button>
 
           <div className="space-y-2">
             {exceptions.map((e) => (
