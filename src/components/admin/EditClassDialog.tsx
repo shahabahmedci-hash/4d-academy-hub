@@ -30,7 +30,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2 } from "lucide-react";
+import { CalendarX, Trash2 } from "lucide-react";
 import { z } from "zod";
 import { ScheduleImpactDialog, ImpactRow, previewScheduleChange, needsConfirmation } from "./ScheduleImpact";
 
@@ -109,6 +109,8 @@ export const EditClassDialog = ({ classData, open, onOpenChange, onClassUpdated 
     section: "",
   });
   const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().slice(0, 10));
+  const [stopFrom, setStopFrom] = useState(new Date().toISOString().slice(0, 10));
+  const [stopping, setStopping] = useState(false);
   const [impact, setImpact] = useState<ImpactRow[] | null>(null);
 
   useEffect(() => {
@@ -256,6 +258,32 @@ export const EditClassDialog = ({ classData, open, onOpenChange, onClassUpdated 
     }
   };
 
+  const handleStopFuture = async () => {
+    setStopping(true);
+    try {
+      const { error } = await (supabase.rpc as any)("stop_class_schedule", {
+        _class_id: classData.id,
+        _from: stopFrom,
+      });
+      if (error) throw error;
+      toast({
+        title: "Future classes cancelled",
+        description: `No classes will be scheduled from ${stopFrom} onwards. Past classes and attendance are untouched.`,
+      });
+      onOpenChange(false);
+      onClassUpdated();
+    } catch (error) {
+      console.error("Error cancelling future classes:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: (error as any)?.message || "Failed to cancel future classes",
+      });
+    } finally {
+      setStopping(false);
+    }
+  };
+
   const handleDelete = async () => {
     setDeleting(true);
     try {
@@ -286,7 +314,7 @@ export const EditClassDialog = ({ classData, open, onOpenChange, onClassUpdated 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Class</DialogTitle>
           <DialogDescription>
